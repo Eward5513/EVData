@@ -1,0 +1,10 @@
+*.json
+*.log
+*.parquet
+*.prof
+*.txt
+*.csv
+*.profile
+*.ipynb
+*.exe
+*.geojson
