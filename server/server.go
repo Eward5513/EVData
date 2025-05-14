@@ -11,7 +11,7 @@ func main() {
 
 	common.CreatLogFile("server.log")
 	defer common.CloseLogFile()
-	common.SetLogLevel(common.DEBUG)
+	//common.SetLogLevel(common.DEBUG)
 
 	flag.IntVar(&common.VehicleCount, "vc", common.PARQUET_COUNT, "vehicle count")
 	flag.Parse()

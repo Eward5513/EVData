@@ -14,6 +14,7 @@ func FileOrDirExists(path string) bool {
 
 // CreateDirs 创建目标目录及其子目录
 func CreateDirs(basePath string) error {
+	InfoLog("Creating directories")
 	//清空目标文件夹
 	if err := os.RemoveAll(basePath); err != nil {
 		log.Fatal("Error removing target directory", err.Error())
@@ -27,10 +28,7 @@ func CreateDirs(basePath string) error {
 	month, day := 13, 32
 	//年
 	for i := 0; i < len(years); i++ {
-		//log.Println(basePath)
-		//log.Println(years[i])
 		dirPath := filepath.Join(basePath, fmt.Sprint(years[i]))
-		//log.Println(dirPath)
 		if err := os.Mkdir(dirPath, os.ModePerm); err != nil {
 			log.Fatal("Error when creating target dir:" + err.Error())
 			return err

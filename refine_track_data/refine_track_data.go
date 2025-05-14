@@ -41,6 +41,8 @@ func CreateRefinedTrackData() {
 		}
 	}
 
+	common.InfoLog("Finish creating directories")
+
 	wg := sync.WaitGroup{}
 	ch := make(chan *proto_struct.Track, READ_BUFFER_SIZE)
 
@@ -151,6 +153,7 @@ func ReadProtoFile(rch chan *proto_struct.Track) {
 					if err := os.Remove(fpath); err != nil {
 						common.ErrorLog("Unable to remove file", fpath)
 					}
+					common.InfoLog("Remove empty file", fpath)
 					continue
 				}
 				rows := proto_tools.ReadTrackFromProto(fpath)

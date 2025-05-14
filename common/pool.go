@@ -37,11 +37,12 @@ func (m *MemoryMap) Clear() {
 		candidatePointPool.Put(cpt)
 	}
 	for ts := range m.m3 {
+		ts.OriginalPoints = make([]*proto_struct.TrackPoint, 0)
+		ts.TrackPoints = make([]*proto_struct.TrackPoint, 0)
 		trackSegmentPool.Put(ts)
 	}
 	for t := range m.m1 {
-		t.TrackSegs = t.TrackSegs[:0]
-
+		t.TrackSegs = make([]*proto_struct.TrackSegment, 0)
 		trackPool.Put(t)
 	}
 }
@@ -57,6 +58,8 @@ func GetTrackPoint(mmp *MemoryMap) *proto_struct.TrackPoint {
 	if mmp != nil {
 		mmp.m2[tp] = true
 	}
+	tp.Latitude = 0
+	tp.Longitude = 0
 	return tp
 }
 
@@ -84,16 +87,6 @@ func GetTrackSegment(mmp *MemoryMap) *proto_struct.TrackSegment {
 	return ts
 }
 
-func PutTrackSegment(p *proto_struct.TrackSegment) {
-	for _, tp := range p.TrackPoints {
-		PutTrackPoint(tp)
-	}
-	for _, op := range p.OriginalPoints {
-		PutTrackPoint(op)
-	}
-	trackSegmentPool.Put(p)
-}
-
 var trackPool = sync.Pool{
 	New: func() interface{} {
 		return &proto_struct.Track{
@@ -107,17 +100,10 @@ func GetTrack(mmp *MemoryMap) *proto_struct.Track {
 	if mmp != nil {
 		mmp.m1[t] = true
 	}
+	t.TrackSegs = make([]*proto_struct.TrackSegment, 0)
+	t.IsBad = 0
+	t.DisCount = 0
 	return t
-}
-
-func PutTrack(t *proto_struct.Track) {
-	for _, ts := range t.TrackSegs {
-		PutTrackSegment(ts)
-	}
-
-	t.TrackSegs = t.TrackSegs[:0]
-
-	trackPool.Put(t)
 }
 
 var candidatePointPool = sync.Pool{
@@ -131,9 +117,7 @@ func GetCandidatePoint(mmp *MemoryMap) *CandidatePoint {
 	if mmp != nil {
 		mmp.m4[cp] = true
 	}
+	cp.Lat = 0
+	cp.Lon = 0
 	return cp
-}
-
-func PutCandidatePoint(p *CandidatePoint) {
-	candidatePointPool.Put(p)
 }

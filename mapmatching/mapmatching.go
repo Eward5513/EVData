@@ -59,7 +59,7 @@ func main() {
 	flag.Float64Var(&DistanceOffset, "d", 40, "Distance offset")
 	flag.IntVar(&workerCount, "wc", 500, "worker count")
 	flag.IntVar(&gcPercent, "gc", 100, "SetGCPercent")
-	flag.IntVar(&gcFrequency, "gcf", -1, "SetGCFrequency")
+	flag.IntVar(&gcFrequency, "gcf", 5000, "SetGCFrequency")
 	flag.IntVar(&common.BATCH_SIZE, "bs", 100, "batch size")
 	flag.IntVar(&common.BATCH, "bi", -1, "batch id")
 	flag.IntVar(&readerChannelSize, "rz", 1e4, "reader channel size")
@@ -358,15 +358,18 @@ func PreProcess(points []*proto_struct.TrackPoint) map[string][]*proto_struct.Tr
 			curTime = k
 			ps := make([]*proto_struct.TrackPoint, 0)
 			ps = append(ps, p)
+			p.StartTime = p.Timestamp
+			p.EndTime = p.Timestamp
 			groupedPoints[k] = ps
 		} else {
 			lastPoint := groupedPoints[k][len(groupedPoints[k])-1]
 			if lastPoint.Latitude == p.Latitude && lastPoint.Longitude == p.Longitude {
-				//common.DebugLog(lastPoint.Timestamp, p.Timestamp, "same")
+				//common.InfoLog(p.Date, lastPoint.Timestamp, p.Timestamp, "same")
 				lastPoint.Speed = p.Speed
-				lastPoint.CollectionTime = p.CollectionTime
-				lastPoint.Timestamp = p.Timestamp
+				lastPoint.EndTime = p.Timestamp
 			} else {
+				p.StartTime = p.Timestamp
+				p.EndTime = p.Timestamp
 				groupedPoints[k] = append(groupedPoints[k], p)
 			}
 		}
@@ -549,13 +552,15 @@ func StartWriterManager(writerChan chan *proto_struct.Track, wg *sync.WaitGroup)
 		if t.IsBad == 1 {
 			badTrackCnt1++
 			badPointCnt1 += len(t.TrackSegs[0].TrackPoints)
-			if _, err = bf1.WriteString(fmt.Sprintln(t.Date, t.Vin, t.Tid)); err != nil {
+			//common.InfoLog("2bad track1:", t.Date, t.Vin, t.Tid, t.IsBad)
+			if _, err = bf1.WriteString(fmt.Sprintln(t.Date, t.Vin, t.Tid, t.DisCount, len(t.TrackSegs[0].TrackPoints))); err != nil {
 				common.ErrorLog("Error writing to bad track file", err)
 			}
 		} else if t.IsBad == 2 {
 			badTrackCnt2++
 			badPointCnt2 += len(t.TrackSegs[0].TrackPoints)
-			if _, err = bf2.WriteString(fmt.Sprintln(t.Date, t.Vin, t.Tid)); err != nil {
+			//common.InfoLog("2bad track2:", t.Date, t.Vin, t.Tid, t.IsBad)
+			if _, err = bf2.WriteString(fmt.Sprintln(t.Date, t.Vin, t.Tid, t.DisCount, len(t.TrackSegs[0].TrackPoints))); err != nil {
 				common.ErrorLog("Error writing to bad track file", err)
 			}
 		}
@@ -624,35 +629,18 @@ func Worker(readerChan chan []*proto_struct.TrackPoint, writerChan chan *proto_s
 		mmap := common.NewMemoryMap()
 		for _, p := range ps {
 			mmap.RecordTrackPoint(p)
-			//121.664006 31.160551
-			//common.DebugLog("point:", p.Longitude, p.Latitude)
-			//以目标点为中心的九宫格
-			directions := []float64{-0.01, 0, 0.01}
-			ins := make([]*IndexNode, 0, 9)
-			for _, d1 := range directions {
-				for _, d2 := range directions {
-					in := SearchIndex(p.Latitude+d1, p.Longitude+d2, indexRoot)
-					if in != nil {
-						ins = append(ins, in)
-					}
-				}
-			}
 
-			//if len(ins) == 0 {
-			//	common.DebugLog("==========1===========")
-			//	common.DebugLog(p.Latitude, p.Longitude)
+			cs := CandidateSearch(p, indexRoot, mmap, 0)
+			//if p.Date == "2022-03-19" && p.Timestamp == "03:49:15" && p.Vin == 1 {
+			//	common.InfoLog("2222222222222")
+			//	for _, c := range cs {
+			//		common.InfoLog(c.Lat, c.Lon)
+			//	}
 			//}
-
-			cs := CandidateSearch(p, ins, mmap)
 
 			candiTime += time.Since(st).Seconds()
 			//common.InfoLog("time for candidate search: ", time.Since(startTime))
 			st = time.Now()
-
-			//if cs == nil {
-			//	common.DebugLog("=======2==============")
-			//	common.DebugLog(p.Latitude, p.Longitude)
-			//}
 
 			if curCandi == nil {
 				curCandi = &common.CandidateSet{Cp: cs}
@@ -681,9 +669,7 @@ func Worker(readerChan chan []*proto_struct.TrackPoint, writerChan chan *proto_s
 				discreteCount++
 			}
 		}
-		//common.DebugLog("discrete count", discreteCount, "total count", len(ps))
 		if float64(discreteCount)/float64(len(ps)) > 0.5 {
-			//common.InfoLog("bad track", firstCandi.Cp[0].originalPoint.Date, firstCandi.Cp[0].originalPoint.Vin, firstCandi.Cp[0].originalPoint.Hour, firstCandi.Cp[0].originalPoint.Hour, firstCandi.Cp[0].originalPoint.Timestamp)
 			res = common.GetTrack(mmap)
 			res.Vin = ps[0].Vin
 			res.Tid = ps[0].Hour
@@ -694,34 +680,52 @@ func Worker(readerChan chan []*proto_struct.TrackPoint, writerChan chan *proto_s
 			res.TrackSegs[0].TrackPoints = ps
 			//res.OriginalPoints = ps
 			res.IsBad = 1
+			res.DisCount = int32(discreteCount)
+			//common.InfoLog("1bad track1:", res.Date, res.Vin, res.Tid, res.IsBad)
 		} else {
 			candidateTracks := make(map[*common.CandidatePoint]*proto_struct.Track)
 			for _, p := range firstCandi.Cp {
 				t := BuildTrack(p, mmap)
 				candidateTracks[p] = t
 			}
+			var retry int
 			for c := firstCandi.Next; c != nil; c = c.Next {
-				//if len(candidateTracks) > 0 {
-				//	for p := range candidateTracks {
-				//		common.DebugLog("point:", p.lat, p.lon, p.originalPoint.Latitude, p.originalPoint.Longitude)
-				//	}
-				//}
-				//common.DebugLog("candidateTracks:", len(c.Cp), len(candidateTracks))
+				bak := candidateTracks
 				candidateTracks = FindOptimalPath(c, candidateTracks, mmap)
 				if len(candidateTracks) == 0 {
-					//common.InfoLog("bad track", c.Cp[0].originalPoint.Date, c.Cp[0].originalPoint.Vin, c.Cp[0].originalPoint.Hour, c.Cp[0].originalPoint.Timestamp)
-					res = common.GetTrack(mmap)
-					res.Vin = ps[0].Vin
-					res.Tid = ps[0].Hour
-					res.StartTime = ps[0].Timestamp
-					res.EndTime = ps[len(ps)-1].Timestamp
-					res.Date = ps[0].Date
-					res.TrackSegs = []*proto_struct.TrackSegment{common.GetTrackSegment(mmap)}
-					res.TrackSegs[0].TrackPoints = ps
-					res.IsBad = 2
-					//OriginalPoints: ps,
-					break
+					//第一次尝试扩大搜索范围
+					if retry == 0 {
+						retry++
+						cps := CandidateSearch(c.Cp[0].OriginalPoint, indexRoot, mmap, float64(retry))
+						c.Next = &common.CandidateSet{Cp: cps, Next: c.Next}
+						candidateTracks = bak
+						//common.InfoLog("try again", c.Cp[0].OriginalPoint.Date, c.Cp[0].OriginalPoint.Hour, c.Cp[0].OriginalPoint.Timestamp)
+					} else if retry == 1 {
+						//第二次将该点标记为离散点
+						retry++
+						cand := common.GetCandidatePoint(mmap)
+						cand.OriginalPoint = c.Cp[0].OriginalPoint
+						cand.Ttype = common.DISCRETE
+						c.Next = &common.CandidateSet{Cp: []*common.CandidatePoint{cand}, Next: c.Next}
+						candidateTracks = bak
+					} else {
+						res = common.GetTrack(mmap)
+						res.Vin = ps[0].Vin
+						res.Tid = ps[0].Hour
+						res.StartTime = ps[0].Timestamp
+						res.EndTime = ps[len(ps)-1].Timestamp
+						res.Date = ps[0].Date
+						res.TrackSegs = []*proto_struct.TrackSegment{common.GetTrackSegment(mmap)}
+						res.TrackSegs[0].TrackPoints = ps
+						res.IsBad = 2
+						res.DisCount = int32(discreteCount)
+						//common.InfoLog("1bad track2:", res.Date, res.Vin, res.Tid, res.IsBad)
+						break
+					}
+				} else {
+					retry = 0
 				}
+
 			}
 
 			if len(candidateTracks) != 0 {
@@ -746,7 +750,7 @@ func Worker(readerChan chan []*proto_struct.TrackPoint, writerChan chan *proto_s
 	}
 }
 
-func CandidateSearch(p *proto_struct.TrackPoint, ins []*IndexNode, mmp *common.MemoryMap) []*common.CandidatePoint {
+func CandidateSearch(p *proto_struct.TrackPoint, indexRoot *IndexNode, mmp *common.MemoryMap, tt float64) []*common.CandidatePoint {
 	var minNode, minNode2 *common.GraphNode
 	minDis := math.MaxFloat64
 	mint := math.MaxFloat64
@@ -754,6 +758,26 @@ func CandidateSearch(p *proto_struct.TrackPoint, ins []*IndexNode, mmp *common.M
 	var minLat, minLon float64
 	targetMap := make(map[int64]int64)
 	candidates := make([]*common.CandidatePoint, 0)
+	do := DistanceOffset + tt*DistanceOffset
+
+	//以目标点为中心的9/16宫格
+	var directions []float64
+	if tt == 0 {
+		directions = []float64{-0.01, 0, 0.01}
+	} else {
+		directions = []float64{-0.02, -0.01, 0, 0.01, 0.02}
+	}
+	ins := make([]*IndexNode, 0)
+	for _, d1 := range directions {
+		for _, d2 := range directions {
+			in := SearchIndex(p.Latitude+d1, p.Longitude+d2, indexRoot)
+			if in != nil {
+				ins = append(ins, in)
+			}
+		}
+	}
+	visited := make(map[float64]float64)
+
 	for _, in := range ins {
 		for _, gn := range in.graphNodes {
 			for _, way := range gn.Next {
@@ -763,9 +787,6 @@ func CandidateSearch(p *proto_struct.TrackPoint, ins []*IndexNode, mmp *common.M
 				}
 				x1, y1, x2, y2, x3, y3 := gn.Lat, gn.Lon, way.Node.Lat, way.Node.Lon, p.Latitude, p.Longitude
 				t := common.CalT(x1, y1, x2, y2, x3, y3)
-				//if gn.id == 475432841 || way.Node.id == 475432841 {
-				//	common.DebugLog("t:", t)
-				//}
 				var dis float64
 				if t < 1 && t > 0 {
 					dis = common.P2lDistance(x1, y1, x2, y2, x3, y3) * common.MAGIC_NUM
@@ -773,20 +794,26 @@ func CandidateSearch(p *proto_struct.TrackPoint, ins []*IndexNode, mmp *common.M
 					//	t = 0
 					//}
 					//所有允许范围内的值
-					if dis < DistanceOffset {
-						cand := common.GetCandidatePoint(mmp)
-						cand.Vertex = []*common.GraphNode{gn, way.Node}
-						cand.Ttype = common.NORMAL
-						cand.TT = t
-						cand.Distance = dis
-						cand.OriginalPoint = p
-						targetMap[way.Node.Id] = gn.Id
-						//common.DebugLog("dis:", dis)
-						cand.Lat, cand.Lon = common.CalP(x1, x2, y1, y2, t)
-						cand.Ep = common.CalEP(dis)
-						cand.RoadID = way.ID
-						candidates = append(candidates, cand)
-						//common.DebugLog(cand.Lat, cand.Lon)
+					if dis < do {
+						lat, lon := common.CalP(x1, x2, y1, y2, t)
+						if v, e := visited[lat]; e == false || v != lon {
+							cand := common.GetCandidatePoint(mmp)
+							cand.Vertex = []*common.GraphNode{gn, way.Node}
+							cand.Ttype = common.NORMAL
+							cand.TT = t
+							cand.Distance = dis
+							cand.OriginalPoint = p
+							targetMap[way.Node.Id] = gn.Id
+							//common.DebugLog("dis:", dis)
+							cand.Lat, cand.Lon = lat, lon
+							cand.Ep = common.CalEP(dis)
+							cand.RoadID = way.ID
+							candidates = append(candidates, cand)
+							//if gn.Id == 6697251679 && p.Date == "2022-03-19" && p.Timestamp == "03:49:15" {
+							//	common.InfoLog(gn.Id, way.Node.Id, cand.Lat, cand.Lon)
+							//}
+							visited[lat] = lon
+						}
 					}
 					//记录最小值
 					if dis < minDis {
@@ -800,21 +827,23 @@ func CandidateSearch(p *proto_struct.TrackPoint, ins []*IndexNode, mmp *common.M
 				} else {
 					//如果不垂直检查端点距离
 					dis = common.Distance(gn.Lat, gn.Lon, p.Latitude, p.Longitude) * common.MAGIC_NUM
-					if dis < DistanceOffset {
-						cand := common.GetCandidatePoint(mmp)
-						cand.Vertex = []*common.GraphNode{gn, way.Node}
-						cand.Ttype = common.NORMAL
-						cand.TT = t
-						cand.Distance = dis
-						cand.OriginalPoint = p
-						cand.Lat = gn.Lat
-						cand.Lon = gn.Lon
-						targetMap[way.Node.Id] = gn.Id
-						//common.DebugLog("dis:", dis)
-						cand.Ep = common.CalEP(dis)
-						cand.RoadID = way.ID
-						candidates = append(candidates, cand)
-						//common.DebugLog(cand.lat, cand.lon)
+					if dis < do {
+						if v, e := visited[gn.Lat]; e == false || v != gn.Lon {
+							cand := common.GetCandidatePoint(mmp)
+							cand.Vertex = []*common.GraphNode{gn, way.Node}
+							cand.Ttype = common.NORMAL
+							cand.TT = t
+							cand.Distance = dis
+							cand.OriginalPoint = p
+							cand.Lat = gn.Lat
+							cand.Lon = gn.Lon
+							targetMap[way.Node.Id] = gn.Id
+							//common.DebugLog("dis:", dis)
+							cand.Ep = common.CalEP(dis)
+							cand.RoadID = way.ID
+							candidates = append(candidates, cand)
+							visited[gn.Lat] = gn.Lon
+						}
 					}
 					//记录最小值
 					if dis < minDis {
@@ -897,13 +926,16 @@ func BuildTrack(p *common.CandidatePoint, mmp *common.MemoryMap) *proto_struct.T
 	tp.CollectionTime = p.OriginalPoint.CollectionTime
 	tp.Date = p.OriginalPoint.Date
 	tp.Timestamp = p.OriginalPoint.Timestamp
+	tp.StartTime = p.OriginalPoint.StartTime
+	tp.EndTime = p.OriginalPoint.EndTime
 	tp.Hour = p.OriginalPoint.Hour
 	tp.Speed = p.OriginalPoint.Speed
-	tp.Longitude = p.Lon
-	tp.Latitude = p.Lat
 	if p.Ttype == common.DISCRETE {
 		tp.Longitude = p.OriginalPoint.Longitude
 		tp.Latitude = p.OriginalPoint.Latitude
+	} else {
+		tp.Longitude = p.Lon
+		tp.Latitude = p.Lat
 	}
 
 	t := common.GetTrack(mmp)
@@ -919,9 +951,11 @@ func BuildTrack(p *common.CandidatePoint, mmp *common.MemoryMap) *proto_struct.T
 	t.Vin = p.OriginalPoint.Vin
 	t.Tid = p.OriginalPoint.Hour
 	t.Date = p.OriginalPoint.Date
-	t.StartTime = p.OriginalPoint.Timestamp
-	t.EndTime = p.OriginalPoint.Timestamp
+	t.StartTime = p.OriginalPoint.StartTime
+	t.EndTime = p.OriginalPoint.EndTime
 	t.Probability = p.Ep
+	t.IsBad = 0
+	t.DisCount = 0
 	return t
 }
 
@@ -972,26 +1006,40 @@ func BuildTrack(p *common.CandidatePoint, mmp *common.MemoryMap) *proto_struct.T
 //
 // }
 func AppendTrack(t *proto_struct.Track, p *common.CandidatePoint, pa *common.Path, mmp *common.MemoryMap) {
-	t.EndTime = p.OriginalPoint.Timestamp
+	t.EndTime = p.OriginalPoint.EndTime
 	currentSeg := t.TrackSegs[len(t.TrackSegs)-1]
 	if currentSeg.RoadId != p.RoadID {
 		currentSeg = common.GetTrackSegment(mmp)
-		currentSeg.StartTime = p.OriginalPoint.Timestamp
-		currentSeg.EndTime = p.OriginalPoint.Timestamp
+		currentSeg.StartTime = p.OriginalPoint.StartTime
+		currentSeg.EndTime = p.OriginalPoint.EndTime
 		currentSeg.RoadId = p.RoadID
 		t.TrackSegs = append(t.TrackSegs, currentSeg)
 	}
 	currentSeg.OriginalPoints = append(currentSeg.OriginalPoints, p.OriginalPoint)
-	currentSeg.EndTime = p.OriginalPoint.Timestamp
+	//if t.Tid == 8 && t.Vin == 1 && t.Date == "2022-02-26" {
+	//	common.InfoLog("============")
+	//	for _, seg := range t.TrackSegs {
+	//		common.InfoLog("segment: ", seg)
+	//		for _, op := range seg.OriginalPoints {
+	//			common.InfoLog(op.Timestamp, op.Longitude, op.Latitude, op)
+	//		}
+	//	}
+	//	common.InfoLog(p.Lat, p.Lon)
+	//	common.InfoLog("append", p.OriginalPoint.Timestamp)
+	//	common.InfoLog("============")
+	//}
+
+	currentSeg.EndTime = p.OriginalPoint.EndTime
 	//t.Probability = p.probability
 
 	if pa != nil {
 		for _, gp := range pa.Points {
-
 			ntp := common.GetTrackPoint(mmp)
 			ntp.Vin = p.OriginalPoint.Vin
 			ntp.Speed = p.OriginalPoint.Speed
 			ntp.Timestamp = p.OriginalPoint.Timestamp
+			ntp.StartTime = p.OriginalPoint.StartTime
+			ntp.EndTime = p.OriginalPoint.EndTime
 			ntp.Date = p.OriginalPoint.Date
 			ntp.Hour = p.OriginalPoint.Hour
 			ntp.Longitude = gp.Lon
@@ -1006,17 +1054,18 @@ func AppendTrack(t *proto_struct.Track, p *common.CandidatePoint, pa *common.Pat
 	tp.Vin = p.OriginalPoint.Vin
 	tp.Hour = p.OriginalPoint.Hour
 	tp.Timestamp = p.OriginalPoint.Timestamp
+	tp.StartTime = p.OriginalPoint.StartTime
+	tp.EndTime = p.OriginalPoint.EndTime
 	tp.CollectionTime = p.OriginalPoint.CollectionTime
-	tp.Latitude = p.Lat
-	tp.Longitude = p.Lon
+	if p.Ttype == common.DISCRETE {
+		tp.Longitude = p.OriginalPoint.Longitude
+		tp.Latitude = p.OriginalPoint.Latitude
+	} else {
+		tp.Latitude = p.Lat
+		tp.Longitude = p.Lon
+	}
 
 	currentSeg.TrackPoints = append(currentSeg.TrackPoints, tp)
-	//同一条路的后继离散点直接记录原始点
-	//if p.Ttype == common.DISCRETE {
-	//	tp.Longitude = p.OriginalPoint.Longitude
-	//	tp.Latitude = p.OriginalPoint.Latitude
-	//}
-
 }
 
 func CopyTrack(t *proto_struct.Track, mmp *common.MemoryMap) *proto_struct.Track {
@@ -1030,6 +1079,7 @@ func CopyTrack(t *proto_struct.Track, mmp *common.MemoryMap) *proto_struct.Track
 
 	//newTrack.TrackSegs = append(newTrack.TrackSegs, t.TrackSegs...)
 
+	newTrack.TrackSegs = make([]*proto_struct.TrackSegment, 0)
 	lastIndex := len(t.TrackSegs) - 1
 	if len(t.TrackSegs) > 1 {
 		newTrack.TrackSegs = append(newTrack.TrackSegs, t.TrackSegs[:lastIndex]...)
@@ -1056,6 +1106,9 @@ func DeepCopyTrack(t *proto_struct.Track) *proto_struct.Track {
 	newTrack.EndTime = t.EndTime
 	newTrack.Date = t.Date
 	newTrack.Probability = t.Probability
+	newTrack.IsBad = t.IsBad
+	newTrack.DisCount = t.DisCount
+	newTrack.TrackSegs = make([]*proto_struct.TrackSegment, 0, len(t.TrackSegs))
 
 	for _, ts := range t.TrackSegs {
 		newTs := common.GetTrackSegment(nil)
@@ -1064,6 +1117,7 @@ func DeepCopyTrack(t *proto_struct.Track) *proto_struct.Track {
 		newTs.RoadId = ts.RoadId
 		newTrack.TrackSegs = append(newTrack.TrackSegs, newTs)
 
+		newTs.OriginalPoints = make([]*proto_struct.TrackPoint, 0, len(ts.OriginalPoints))
 		for _, op := range ts.OriginalPoints {
 			tp := common.GetTrackPoint(nil)
 			tp.Vin = op.Vin
@@ -1073,9 +1127,15 @@ func DeepCopyTrack(t *proto_struct.Track) *proto_struct.Track {
 			tp.Date = op.Date
 			tp.Speed = op.Speed
 			tp.Timestamp = op.Timestamp
+			tp.StartTime = op.StartTime
+			tp.EndTime = op.EndTime
 			tp.CollectionTime = op.CollectionTime
 			newTs.OriginalPoints = append(newTs.OriginalPoints, tp)
+			//if t.Tid == 8 && t.Vin == 1 && t.Date == "2022-02-26" {
+			//	common.InfoLog(tp.Timestamp, tp.Longitude, tp.Latitude)
+			//}
 		}
+		newTs.TrackPoints = make([]*proto_struct.TrackPoint, 0, len(ts.TrackPoints))
 		for _, op := range ts.TrackPoints {
 			tp := common.GetTrackPoint(nil)
 			tp.Vin = op.Vin
@@ -1085,6 +1145,8 @@ func DeepCopyTrack(t *proto_struct.Track) *proto_struct.Track {
 			tp.Date = op.Date
 			tp.Speed = op.Speed
 			tp.Timestamp = op.Timestamp
+			tp.StartTime = op.StartTime
+			tp.EndTime = op.EndTime
 			tp.CollectionTime = op.CollectionTime
 			newTs.TrackPoints = append(newTs.TrackPoints, tp)
 		}

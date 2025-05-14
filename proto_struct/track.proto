@@ -14,6 +14,8 @@ message TrackPoint {
   double speed = 6;             // 速度
   double longitude = 7;         // 经度
   double latitude = 8;          // 纬度
+  string start_time=9;
+  string end_time=10;
 }
 
 // 轨迹段信息
@@ -35,4 +37,5 @@ message Track {
   repeated TrackSegment track_segs = 6;     // 轨迹段列表
   double probability = 7;       // 概率值
   int32 isBad = 8;
+  int32 disCount =9;
 }

@@ -34,7 +34,9 @@ type TrackPoint struct {
 	Hour           int32                  `parquet:"hour" protobuf:"varint,5,opt,name=hour,proto3" json:"hour,omitempty"`                                           // 小时
 	Speed          float64                `parquet:"speed" protobuf:"fixed64,6,opt,name=speed,proto3" json:"speed,omitempty"`                                        // 速度
 	Longitude      float64                `parquet:"longitude" protobuf:"fixed64,7,opt,name=longitude,proto3" json:"longitude,omitempty"`                                // 经度
-	Latitude       float64                `parquet:"latitude" protobuf:"fixed64,8,opt,name=latitude,proto3" json:"latitude,omitempty"`                                  // 纬度
+	Latitude       float64                `parquet:"latitude" protobuf:"fixed64,8,opt,name=latitude,proto3" json:"latitude,omitempty"`
+	StartTime      string                 `protobuf:"bytes,9,opt,name=start_time,json=startTime,proto3" json:"start_time,omitempty"`
+	EndTime        string                 `protobuf:"bytes,10,opt,name=end_time,json=endTime,proto3" json:"end_time,omitempty"`// 纬度
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -140,6 +142,20 @@ func (x *TrackPoint) GetLatitude() float64 {
 	return 0
 }
 
+func (x *TrackPoint) GetStartTime() string {
+	if x != nil {
+		return x.StartTime
+	}
+	return ""
+}
+
+func (x *TrackPoint) GetEndTime() string {
+	if x != nil {
+		return x.EndTime
+	}
+	return ""
+}
+
 // 轨迹段信息
 type TrackSegment struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
@@ -228,6 +244,7 @@ type Track struct {
 	TrackSegs     []*TrackSegment        `protobuf:"bytes,6,rep,name=track_segs,json=trackSegs,proto3" json:"track_segs,omitempty"` // 轨迹段列表
 	Probability   float64                `protobuf:"fixed64,7,opt,name=probability,proto3" json:"probability,omitempty"`            // 概率值
 	IsBad         int32                  `protobuf:"varint,8,opt,name=isBad,proto3" json:"isBad,omitempty"`
+	DisCount      int32                  `protobuf:"varint,9,opt,name=disCount,proto3" json:"disCount,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -357,11 +374,18 @@ func (x *Track) GetIsBad() int32 {
 	return 0
 }
 
+func (x *Track) GetDisCount() int32 {
+	if x != nil {
+		return x.DisCount
+	}
+	return 0
+}
+
 var File_track_proto protoreflect.FileDescriptor
 
 const file_track_proto_rawDesc = "" +
 	"\n" +
-	"\vtrack.proto\x12\x05track\"\xdd\x01\n" +
+	"\vtrack.proto\x12\x05track\"\x97\x02\n" +
 	"\n" +
 	"TrackPoint\x12\x10\n" +
 	"\x03vin\x18\x01 \x01(\x05R\x03vin\x12'\n" +
@@ -371,14 +395,18 @@ const file_track_proto_rawDesc = "" +
 	"\x04hour\x18\x05 \x01(\x05R\x04hour\x12\x14\n" +
 	"\x05speed\x18\x06 \x01(\x01R\x05speed\x12\x1c\n" +
 	"\tlongitude\x18\a \x01(\x01R\tlongitude\x12\x1a\n" +
-	"\blatitude\x18\b \x01(\x01R\blatitude\"\xd3\x01\n" +
+	"\blatitude\x18\b \x01(\x01R\blatitude\x12\x1d\n" +
+	"\n" +
+	"start_time\x18\t \x01(\tR\tstartTime\x12\x19\n" +
+	"\bend_time\x18\n" +
+	" \x01(\tR\aendTime\"\xd3\x01\n" +
 	"\fTrackSegment\x12\x1d\n" +
 	"\n" +
 	"start_time\x18\x01 \x01(\tR\tstartTime\x12\x19\n" +
 	"\bend_time\x18\x02 \x01(\tR\aendTime\x12\x17\n" +
 	"\aroad_id\x18\x03 \x01(\x03R\x06roadId\x124\n" +
 	"\ftrack_points\x18\x04 \x03(\v2\x11.track.TrackPointR\vtrackPoints\x12:\n" +
-	"\x0foriginal_points\x18\x05 \x03(\v2\x11.track.TrackPointR\x0eoriginalPoints\"\xe5\x01\n" +
+	"\x0foriginal_points\x18\x05 \x03(\v2\x11.track.TrackPointR\x0eoriginalPoints\"\x81\x02\n" +
 	"\x05Track\x12\x10\n" +
 	"\x03vin\x18\x01 \x01(\x05R\x03vin\x12\x10\n" +
 	"\x03tid\x18\x02 \x01(\x05R\x03tid\x12\x1d\n" +
@@ -389,7 +417,8 @@ const file_track_proto_rawDesc = "" +
 	"\n" +
 	"track_segs\x18\x06 \x03(\v2\x13.track.TrackSegmentR\ttrackSegs\x12 \n" +
 	"\vprobability\x18\a \x01(\x01R\vprobability\x12\x14\n" +
-	"\x05isBad\x18\b \x01(\x05R\x05isBadB\x10Z\x0e.;proto_structb\x06proto3"
+	"\x05isBad\x18\b \x01(\x05R\x05isBad\x12\x1a\n" +
+	"\bdisCount\x18\t \x01(\x05R\bdisCountB\x10Z\x0e.;proto_structb\x06proto3"
 
 var (
 	file_track_proto_rawDescOnce sync.Once

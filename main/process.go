@@ -4,6 +4,7 @@ import (
 	"EVdata/CSV"
 	"EVdata/common"
 	"EVdata/pgpg"
+	"EVdata/proto_struct"
 	"fmt"
 	"log"
 	"os"
@@ -15,53 +16,53 @@ import (
 )
 
 // CreateCSVWorker 创建所需协程及通道
-func CreateCSVWorker(wg *sync.WaitGroup) map[int]chan *common.RawPoint {
-	years := []int{2021, 2022}
-	month, day := 13, 32
-	register := make(map[int]chan *common.RawPoint)
-	//年
-	for y := 0; y < len(years); y++ {
-		//月
-		for m := 1; m < month; m++ {
-			//日
-			for d := 1; d < day; d++ {
-				t := years[y]*1e4 + m*1e2 + d
-				ch := make(chan *common.RawPoint, WORKER_BUFFER_SIZE)
-				register[t] = ch
-				//log.Println("Register ", t)
-				dirPath := filepath.Join(common.FILTERED_DATA_DIR_PATH, fmt.Sprint(years[y]), fmt.Sprint(m), fmt.Sprint(d))
-				go WriteDataToCSV(dirPath, ch, wg)
-			}
-		}
-	}
-	return register
-}
+//func CreateCSVWorker(wg *sync.WaitGroup) map[int]chan *common.RawPoint {
+//	years := []int{2021, 2022}
+//	month, day := 13, 32
+//	register := make(map[int]chan *common.RawPoint)
+//	//年
+//	for y := 0; y < len(years); y++ {
+//		//月
+//		for m := 1; m < month; m++ {
+//			//日
+//			for d := 1; d < day; d++ {
+//				t := years[y]*1e4 + m*1e2 + d
+//				ch := make(chan *common.RawPoint, WORKER_BUFFER_SIZE)
+//				register[t] = ch
+//				//log.Println("Register ", t)
+//				dirPath := filepath.Join(common.REFINED_RAW_DATA_DIR_PATH, fmt.Sprint(years[y]), fmt.Sprint(m), fmt.Sprint(d))
+//				go WriteDataToCSV(dirPath, ch, wg)
+//			}
+//		}
+//	}
+//	return register
+//}
 
-func CreateCSVManager(wg *sync.WaitGroup, ch chan *common.RawPoint) {
-	wg.Add(1)
-	log.Println("Create Manager")
-	defer wg.Done()
-	register := CreateCSVWorker(wg)
-	for {
-		ms := <-ch
-		//log.Println("Upper channel:", len(ch))
-		if ms != nil {
-			//log.Println("manager receive data", ms)
-			if _, ok := register[ms.TimeStamp]; ok == false {
-				log.Println("Unknown time", ms.TimeStamp, ms.CollectionTime)
-			} else {
-				register[ms.TimeStamp] <- ms
-			}
-		} else {
-			//通道关闭，关闭所有worker
-			log.Println("Close Manager")
-			for _, v := range register {
-				close(v)
-			}
-			return
-		}
-	}
-}
+//func CreateCSVManager(wg *sync.WaitGroup, ch chan *common.RawPoint) {
+//	wg.Add(1)
+//	log.Println("Create Manager")
+//	defer wg.Done()
+//	register := CreateCSVWorker(wg)
+//	for {
+//		ms := <-ch
+//		//log.Println("Upper channel:", len(ch))
+//		if ms != nil {
+//			//log.Println("manager receive data", ms)
+//			if _, ok := register[ms.TimeStamp]; ok == false {
+//				log.Println("Unknown time", ms.TimeStamp, ms.CollectionTime)
+//			} else {
+//				register[ms.TimeStamp] <- ms
+//			}
+//		} else {
+//			//通道关闭，关闭所有worker
+//			log.Println("Close Manager")
+//			for _, v := range register {
+//				close(v)
+//			}
+//			return
+//		}
+//	}
+//}
 
 func ReadSourceFile(ch chan *common.RawPoint) {
 	sm1, sm2 := common.NewSummary(), common.NewSummary()
@@ -126,7 +127,7 @@ func WriteDataToCSV(dirPath string, ch chan *common.RawPoint, wg *sync.WaitGroup
 			if csvWriter != nil {
 				csvWriter.Close()
 			}
-			log.Println("worker closed by channel", dirPath)
+			common.DebugLog("worker closed by channel", dirPath)
 			return
 		}
 		//log.Println("receive message:", ms)
@@ -224,7 +225,7 @@ func ParquetWriter(fPath string, ch chan *common.RawPoint, wg *sync.WaitGroup) {
 			if pqWriter != nil {
 				pqWriter.Close()
 			}
-			common.InfoLog("worker closed by channel", fPath)
+			common.DebugLog("worker closed by channel", fPath)
 			return
 		}
 		t := time.UnixMilli(ms.CollectionTime)
@@ -232,12 +233,12 @@ func ParquetWriter(fPath string, ch chan *common.RawPoint, wg *sync.WaitGroup) {
 		if err != nil {
 			common.ErrorLog("Parquet writer error:", err.Error())
 		}
-		row := &common.TrackPoint{
-			Vin:            v,
+		row := &proto_struct.TrackPoint{
+			Vin:            int32(v),
 			CollectionTime: ms.CollectionTime,
 			Date:           t.Format("2006-01-02"),
 			Timestamp:      t.Format("15:04:05"),
-			Hour:           t.Hour(),
+			Hour:           int32(t.Hour()),
 			Speed:          ms.Speed,
 			Longitude:      ms.Longitude,
 			Latitude:       ms.Latitude,

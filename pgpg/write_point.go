@@ -2,6 +2,7 @@ package pgpg
 
 import (
 	"EVdata/common"
+	"EVdata/proto_struct"
 	"github.com/parquet-go/parquet-go"
 	"log"
 	"os"
@@ -9,15 +10,15 @@ import (
 )
 
 type PQPointWriter struct {
-	data     []*common.TrackPoint
+	data     []*proto_struct.TrackPoint
 	filename string
 }
 
 func NewPQWriter(f string) *PQPointWriter {
-	return &PQPointWriter{filename: f, data: make([]*common.TrackPoint, 0)}
+	return &PQPointWriter{filename: f, data: make([]*proto_struct.TrackPoint, 0)}
 }
 
-func (w *PQPointWriter) Write(vehicle *common.TrackPoint) {
+func (w *PQPointWriter) Write(vehicle *proto_struct.TrackPoint) {
 	w.data = append(w.data, vehicle)
 }
 
@@ -38,7 +39,7 @@ func (w *PQPointWriter) Close() {
 	}
 	defer file.Close()
 
-	ww := parquet.NewGenericWriter[*common.TrackPoint](file, cfg)
+	ww := parquet.NewGenericWriter[*proto_struct.TrackPoint](file, cfg)
 	if _, err = ww.Write(w.data); err != nil {
 		common.ErrorLog("error when write parquet file", err)
 	}

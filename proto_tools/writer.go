@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"encoding/binary"
 	"google.golang.org/protobuf/proto"
-	"log"
 	"os"
 )
 
@@ -23,7 +22,7 @@ type ProtoBufWriter struct {
 func NewProtoBufWriter(f string) *ProtoBufWriter {
 	file, err := os.Create(f)
 	if err != nil {
-		log.Println("error when create file", err)
+		common.ErrorLog("error when create file", err)
 	}
 	b := bufio.NewWriterSize(file, WriterBuffer)
 
@@ -33,7 +32,7 @@ func NewProtoBufWriter(f string) *ProtoBufWriter {
 func (w *ProtoBufWriter) Write(p *proto_struct.Track) {
 	data, err := proto.Marshal(p)
 	if err != nil {
-		log.Fatalf("序列化错误: %v", err)
+		common.FatalLog("序列化错误: %v", err)
 	}
 	if err := binary.Write(w.buf, binary.LittleEndian, uint32(len(data))); err != nil {
 		common.ErrorLog("error when writing length", err)
