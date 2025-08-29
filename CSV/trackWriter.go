@@ -33,7 +33,7 @@ func (w *TrackWriter) Write(t *proto_struct.Track) {
 }
 
 func (w *TrackWriter) Close() {
-	if err := w.csvWriter.WriteAll(w.data.ToCsv()); err != nil {
+	if err := w.csvWriter.WriteAll([][]string{{""}}); err != nil {
 		common.ErrorLog("Error when writing data", err)
 	}
 	w.csvWriter.Flush()

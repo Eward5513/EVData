@@ -237,14 +237,3 @@ var VehicleColumns = []string{
 	"h2_max_pressure_sensor_seq",
 	"high_voltage_dcd_state",
 }
-
-var PivotalVehicleColumns = []string{
-	"vin",
-	"collection_time",
-	"date",
-	"timestamp",
-	"hour",
-	"speed",
-	"longitude",
-	"latitude",
-}

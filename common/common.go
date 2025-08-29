@@ -7,24 +7,26 @@ import (
 )
 
 const (
-	RAW_DATA_DIR_PATH         = "D:/zhangteng2/raw_data"
-	REFINED_RAW_DATA_DIR_PATH = "D:/zhangteng2/refined_raw_data"
-	POINT_DATA_DIR_PATH       = "D:/zhangteng2/filtered_data1_UTC+8"
+	RAW_DATA_DIR_PATH          = "D:/data/dataset_origin_anting_hkust"
+	REFINED_RAW_DATA_DIR_PATH  = "D:/zhangteng3/refined_raw_data"
+	POINT_DATA_DIR_PATH        = "D:/zhangteng3/points/csv"
+	RAW_POINT_PARQUET_PATH     = "D:/zhangteng3/points1/points.parquet"
+	MATCHED_POINT_PARQUET_PATH = "D:/zhangteng3/points_aftermapmatching/points.parquet"
+	MATCHED_TRACK_PARQUET_PATH = "D:/zhangteng3/points_aftermapmatching/tracks.bin"
+	MATCHED_POINT_CSV_DIR      = "D:/zhangteng3/points_aftermapmatching/csv"
 
 	TRACK_RAW_DATA_DIR_PATH     = "D:/zhangteng2/track_raw_data"
 	TRACK_DATA_DIR_PATH         = "D:/zhangteng2/track_data"
 	PARQUET_COUNT           int = 10017
+	SERVER_WORKER_COUNT         = 5000
+	VEHICLE_COUNT               = 93469
 )
 
 var (
-	TimeOffset    = time.Date(2021, 12, 21, 8, 0, 0, 0, time.UTC).UnixMilli() - 693244800000
-	VehicleCount  int
-	BATCH         int
-	BATCH_SIZE    int
-	MIN_LATITUDE  float64 = 30.6974858
-	MAX_LATITUDE  float64 = 31.8610639
-	MIN_LONGITUDE float64 = 120.8557546
-	MAX_LONGITUDE float64 = 122.0158854
+	MIN_LATITUDE  float64 = 100
+	MAX_LATITUDE  float64 = 1
+	MIN_LONGITUDE float64 = 100
+	MAX_LONGITUDE float64 = 1
 )
 
 type Summary struct {

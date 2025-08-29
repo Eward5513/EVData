@@ -8,3 +8,4 @@
 *.ipynb
 *.exe
 *.geojson
+.idea

@@ -6,36 +6,36 @@ package track;
 
 // 轨迹点信息
 message TrackPoint {
-  int32 vin = 1;                // 车辆识别号
-  int64 collection_time = 2;    // 采集时间戳
-  string date = 3;              // 日期
-  string timestamp = 4;         // 时间戳字符串
-  int32 hour = 5;               // 小时
-  double speed = 6;             // 速度
-  double longitude = 7;         // 经度
-  double latitude = 8;          // 纬度
-  string start_time=9;
-  string end_time=10;
+  int32 id = 1;                // 车辆识别号
+  string time = 2;    // 采集时间戳
+  double speed = 3;              // 日期
+  double longitude = 4;         // 时间戳字符串
+  double latitude = 5;               // 小时
+  int32 vehicle_status = 6;             // 速度
+  int32 have_driver = 7;         // 经度
+  int32 have_brake = 8;          // 纬度
+  int32 accelerator_pedal=9;
+  int32 brake_status=10;
+
+  double matched_lon=11;
+  double matched_lat=12;
+  int64 road_id=13;
+  int32 track_id=14;
+  int64 time_int=15;
 }
 
-// 轨迹段信息
-message TrackSegment {
-  string start_time = 1;        // 开始时间
-  string end_time = 2;          // 结束时间
-  int64 road_id = 3;            // 道路ID
-  repeated TrackPoint track_points = 4;     // 轨迹点列表
-  repeated TrackPoint original_points = 5;  // 原始轨迹点列表
+message MatchingPoint{
+  double original_lon=1;
+  double original_lat=2;
+  double matched_lon=3;
+  double matched_lat=4;
+  int64 road_id=5;
 }
 
 // 完整轨迹信息
 message Track {
-  int32 vin = 1;                // 车辆识别号
+  int32 id = 1;                // 车辆识别号
   int32 tid = 2;                // 轨迹ID
-  string start_time = 3;        // 开始时间
-  string end_time = 4;          // 结束时间
-  string date = 5;              // 日期
-  repeated TrackSegment track_segs = 6;     // 轨迹段列表
-  double probability = 7;       // 概率值
-  int32 isBad = 8;
-  int32 disCount =9;
+  repeated MatchingPoint mps = 3;     // 轨迹点列表
+  double probability = 4;       // 概率值
 }

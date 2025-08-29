@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 )
 
 func FileOrDirExists(path string) bool {
@@ -85,4 +87,58 @@ func DeleteEmptyDirs(filePath string) error {
 		return nil
 	}
 	return nil
+}
+
+func ClearFolder(path string) error {
+	fileInfo, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		err := os.MkdirAll(path, 0755)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	if fileInfo.IsDir() {
+		entries, err := os.ReadDir(path)
+		if err != nil {
+			return err
+		}
+
+		for _, entry := range entries {
+			entryPath := filepath.Join(path, entry.Name())
+			err := os.RemoveAll(entryPath)
+			if err != nil {
+				continue
+			}
+		}
+	} else {
+		err := os.Remove(path)
+		if err != nil {
+			return err
+		}
+
+		err = os.MkdirAll(path, 0755)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ParseTimeToInt(timeStr string) int64 {
+	parts := strings.Split(timeStr, ":")
+	if len(parts) != 3 {
+		return 0 // 如果格式不正确，返回0
+	}
+
+	hour, err1 := strconv.Atoi(parts[0])
+	minute, err2 := strconv.Atoi(parts[1])
+	second, err3 := strconv.Atoi(parts[2])
+
+	if err1 != nil || err2 != nil || err3 != nil {
+		return 0 // 如果转换失败，返回0
+	}
+
+	return int64(hour*60*60 + minute*60 + second)
 }

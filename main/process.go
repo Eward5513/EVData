@@ -4,7 +4,7 @@ import (
 	"EVdata/CSV"
 	"EVdata/common"
 	"EVdata/pgpg"
-	"EVdata/proto_struct"
+	"EVdata/proto_tools"
 	"fmt"
 	"log"
 	"os"
@@ -228,21 +228,7 @@ func ParquetWriter(fPath string, ch chan *common.RawPoint, wg *sync.WaitGroup) {
 			common.DebugLog("worker closed by channel", fPath)
 			return
 		}
-		t := time.UnixMilli(ms.CollectionTime)
-		v, err := strconv.Atoi(ms.Vin)
-		if err != nil {
-			common.ErrorLog("Parquet writer error:", err.Error())
-		}
-		row := &proto_struct.TrackPoint{
-			Vin:            int32(v),
-			CollectionTime: ms.CollectionTime,
-			Date:           t.Format("2006-01-02"),
-			Timestamp:      t.Format("15:04:05"),
-			Hour:           int32(t.Hour()),
-			Speed:          ms.Speed,
-			Longitude:      ms.Longitude,
-			Latitude:       ms.Latitude,
-		}
-		pqWriter.Write(row)
+		tp := proto_tools.ConvertRawPointToTrackPoint(ms)
+		pqWriter.Write(tp)
 	}
 }

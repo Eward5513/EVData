@@ -11,7 +11,7 @@ import (
 	"strconv"
 )
 
-func ReadPointFromCSV(path string) []*common.TrackPoint {
+func ReadPointFromCSV(path string, id int) []*common.TrackPoint {
 	file, err := os.Open(path)
 	if err != nil {
 		log.Fatal("打开CSV文件失败:", err)
@@ -34,46 +34,29 @@ func ReadPointFromCSV(path string) []*common.TrackPoint {
 			log.Println("读取CSV记录失败:", err)
 		}
 
-		vin, err := strconv.Atoi(record[0])
+		speed, err := strconv.ParseFloat(record[1], 64)
 		if err != nil {
-			log.Printf("解析vin失败[%s]: %v\n", record[0], err)
+			log.Printf("解析speed失败[%s]: %v\n", record[1], err)
 			continue
 		}
-		collectionTime, err := strconv.ParseInt(record[1], 10, 64)
+		longitude, err := strconv.ParseFloat(record[3], 64)
 		if err != nil {
-			log.Printf("解析collection_time失败[%s]: %v\n", record[1], err)
+			log.Printf("解析longitude失败[%s]: %v\n", record[2], err)
 			continue
 		}
-		hour, err := strconv.Atoi(record[4])
+		latitude, err := strconv.ParseFloat(record[4], 64)
 		if err != nil {
-			log.Printf("解析hour失败[%s]: %v\n", record[4], err)
-			continue
-		}
-		speed, err := strconv.ParseFloat(record[5], 64)
-		if err != nil {
-			log.Printf("解析speed失败[%s]: %v\n", record[5], err)
-			continue
-		}
-		longitude, err := strconv.ParseFloat(record[6], 64)
-		if err != nil {
-			log.Printf("解析longitude失败[%s]: %v\n", record[6], err)
-			continue
-		}
-		latitude, err := strconv.ParseFloat(record[7], 64)
-		if err != nil {
-			log.Printf("解析latitude失败[%s]: %v\n", record[7], err)
+			log.Printf("解析latitude失败[%s]: %v\n", record[3], err)
 			continue
 		}
 
 		point := &common.TrackPoint{
-			Vin:            vin,
-			CollectionTime: collectionTime,
-			Date:           record[2],
-			Timestamp:      record[3],
-			Hour:           hour,
-			Speed:          speed,
-			Longitude:      longitude,
-			Latitude:       latitude,
+			ID:        id,
+			Time:      record[0],
+			Speed:     speed,
+			Longitude: longitude,
+			Latitude:  latitude,
+			TimeInt:   common.ParseTimeToInt(record[0]),
 		}
 		points = append(points, point)
 	}

@@ -34,7 +34,7 @@ func GetMetaData1(filename string) {
 	}
 }
 
-func ReadPointFromParquet(filename string) []*common.RawPoint {
+func ReadPointFromParquet(filename string) [][]*proto_struct.TrackPoint {
 	cfg, err := parquet.NewReaderConfig()
 	if err != nil {
 		log.Fatal(err)
@@ -48,47 +48,17 @@ func ReadPointFromParquet(filename string) []*common.RawPoint {
 	reader := parquet.NewReader(file, cfg)
 
 	numRows := reader.NumRows()
-	rows := make([]*common.RawPoint, numRows)
+	rows := make([][]*proto_struct.TrackPoint, common.VEHICLE_COUNT+1)
 	var i int64
 	for i = 0; i < numRows; i++ {
-		var vehicle common.RawPoint
+		var vehicle proto_struct.TrackPoint
 		err = reader.Read(&vehicle)
+		vehicle.TimeInt = common.ParseTimeToInt(vehicle.Time)
 		if err != nil {
 			log.Println("error when reading data", err)
 		}
-		rows[i] = &vehicle
+		rows[vehicle.Id] = append(rows[vehicle.Id], &vehicle)
 	}
-	return rows
-}
-
-func ReadTrackPointFromParquet(filename string) []*proto_struct.TrackPoint {
-	//start := time.Now()
-	cfg, err := parquet.NewReaderConfig()
-	if err != nil {
-		log.Fatal(err)
-	}
-	file, err := os.Open(filename)
-	if err != nil {
-		common.InfoLog(filename, err)
-		return nil
-	}
-	defer file.Close()
-
-	reader := parquet.NewReader(file, cfg)
-
-	numRows := reader.NumRows()
-	//log.Println(reader.Schema(), numRows)
-	rows := make([]*proto_struct.TrackPoint, numRows)
-	var i int64
-	for i = 0; i < numRows; i++ {
-		v := common.GetTrackPoint(nil)
-		err = reader.Read(v)
-		if err != nil {
-			common.ErrorLog("error when reading data", err)
-		}
-		rows[i] = v
-	}
-	//common.InfoLog("time for reading file", time.Since(start))
 	return rows
 }
 

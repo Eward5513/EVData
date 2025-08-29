@@ -4,55 +4,55 @@ import (
 	"EVdata/common"
 	"EVdata/proto_struct"
 	"encoding/csv"
-	"errors"
-	"log"
 	"os"
-	"sort"
 )
+
+var PointHeaders = []string{
+	"id",
+	"time",
+	"speed",
+	"longitude",
+	"latitude",
+	"vehicle_status",
+	"have_driver",
+	"have_brake",
+	"accelerator_pedal",
+	"brake_status",
+	"matched_lon",
+	"matched_lat",
+	"road_id",
+	"track_id",
+}
 
 type PointWriter struct {
 	csvWriter *csv.Writer
 	file      *os.File
-	data      []*proto_struct.TrackPoint
 }
 
-func NewPointWriter(f *os.File) *PointWriter {
+func NewPointWriter(path string) *PointWriter {
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0744)
+	if err != nil {
+		common.ErrorLog("Failed to create file:", err)
+	}
+
 	w := &PointWriter{file: f, csvWriter: csv.NewWriter(f)}
-	w.data = make([]*proto_struct.TrackPoint, 0)
-	if err := w.csvWriter.Write(common.PivotalVehicleColumns); err != nil {
-		log.Println("Error when writing header", err)
+	if err := w.csvWriter.Write(PointHeaders); err != nil {
+		common.ErrorLog("Error when writing header", err)
 	}
 	return w
 }
 
-func (w *PointWriter) Write(d *proto_struct.TrackPoint) error {
-	if d == nil {
-		log.Println("data is nil")
-		return errors.New("data is nil")
+func (w *PointWriter) Write(data []*proto_struct.TrackPoint) {
+	if data == nil || len(data) == 0 {
+		common.ErrorLog("data is nil")
+		return
 	}
-	w.data = append(w.data, d)
-	return nil
-}
 
-func (w *PointWriter) Close() {
-	sort.Slice(w.data, func(i, j int) bool { return (w.data[i]).CollectionTime < (w.data[j]).CollectionTime })
-	for _, d := range w.data {
-		if err := w.csvWriter.Write(d.ToCsv()); err != nil {
-			log.Println("Error when writing data", err)
+	for _, p := range data {
+		if err := w.csvWriter.Write(p.ToCSV()); err != nil {
+			common.ErrorLog("Error when writing data", err, p)
 		}
 	}
 	w.csvWriter.Flush()
 	_ = w.file.Close()
-}
-
-func WriteSummary(data [][]string, fileName string) {
-	f, err := os.Create(fileName)
-	if err != nil {
-		log.Println("Error when writing summary", err)
-	}
-	defer f.Close()
-	w := csv.NewWriter(f)
-	if err := w.WriteAll(data); err != nil {
-		log.Println("Error when writing summary", err)
-	}
 }

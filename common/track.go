@@ -2,18 +2,13 @@ package common
 
 import (
 	"EVdata/proto_struct"
-	"encoding/json"
-	"fmt"
 	"math"
-	"time"
 )
 
 const (
 	MAGIC_NUM = 111320
 	SIGMA     = 40
 )
-
-var TRACK_HEADER = []string{"VIN", "Date", "TID", "StartTime", "EndTime", "road_id", "TrackPoints", "OriginalPoints"}
 
 type CandidateType = int
 
@@ -80,89 +75,6 @@ type Road struct {
 	ID   int64
 	Way  *Element
 	Node *GraphNode
-}
-
-type TrackSegment struct {
-	StartTime      string        `parquet:"start_time"`
-	EndTime        string        `parquet:"end_time"`
-	RoadID         int64         `parquet:"road_id"`
-	TrackPoints    []*TrackPoint `parquet:"track_points"`
-	OriginalPoints []*TrackPoint `parquet:"original_points"`
-}
-
-type TrackPoint struct {
-	Vin            int     `parquet:"vin"`
-	CollectionTime int64   `parquet:"collectiontime"`
-	Date           string  `parquet:"date"`
-	Timestamp      string  `parquet:"timestamp"`
-	Hour           int     `parquet:"hour"`
-	Speed          float64 `parquet:"speed"`
-	Longitude      float64 `parquet:"longitude"`
-	Latitude       float64 `parquet:"latitude"`
-}
-
-func (data *TrackPoint) ToCsv() []string {
-	t := time.UnixMilli(data.CollectionTime)
-	csvData := []string{
-		fmt.Sprint(data.Vin),
-		fmt.Sprintf("%d", data.CollectionTime),
-		t.Format("2006-01-02"),
-		t.Format("15:04:05"),
-		fmt.Sprintf("%d", t.Hour()),
-		fmt.Sprintf("%.1f", data.Speed),
-		fmt.Sprintf("%.6f", data.Longitude),
-		fmt.Sprintf("%.6f", data.Latitude),
-	}
-	return csvData
-}
-
-type Track struct {
-	Vin         int             `parquet:"vin"`
-	Tid         int             `parquet:"tid"`
-	StartTime   string          `parquet:"start_time"`
-	EndTime     string          `parquet:"end_time"`
-	Date        string          `parquet:"date"`
-	TrackSegs   []*TrackSegment `parquet:"track_segs"`
-	Probability float64
-}
-
-func (t *Track) ToCsv() [][]string {
-	result := make([][]string, 0, len(t.TrackSegs))
-
-	for _, seg := range t.TrackSegs {
-		// 将单个轨迹段的轨迹点转换为JSON字符串
-		trackPointsBytes, _ := json.Marshal(seg.TrackPoints)
-		originalPointsBytes, _ := json.Marshal(seg.OriginalPoints)
-
-		row := []string{
-			fmt.Sprintf("%d", t.Vin),
-			t.Date,
-			fmt.Sprintf("%d", t.Tid),
-			seg.StartTime,
-			seg.EndTime,
-			fmt.Sprintf("%d", seg.RoadID),
-			string(trackPointsBytes),
-			string(originalPointsBytes),
-		}
-
-		result = append(result, row)
-	}
-
-	// 如果没有轨迹段，返回一个包含基本信息的行
-	if len(result) == 0 {
-		result = append(result, []string{
-			fmt.Sprintf("%d", t.Vin),
-			fmt.Sprintf("%d", t.Tid),
-			t.StartTime,
-			t.EndTime,
-			t.Date,
-			"",
-			"[]",
-			"[]",
-		})
-	}
-
-	return result
 }
 
 func Distance(x1, y1, x2, y2 float64) float64 {
