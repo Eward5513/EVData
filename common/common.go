@@ -11,9 +11,9 @@ const (
 	REFINED_RAW_DATA_DIR_PATH  = "D:/zhangteng3/refined_raw_data"
 	POINT_DATA_DIR_PATH        = "D:/zhangteng3/points/csv"
 	RAW_POINT_PARQUET_PATH     = "D:/zhangteng3/points1/points.parquet"
-	MATCHED_POINT_PARQUET_PATH = "D:/zhangteng3/points_aftermapmatching/points.parquet"
-	MATCHED_TRACK_PARQUET_PATH = "D:/zhangteng3/points_aftermapmatching/tracks.bin"
-	MATCHED_POINT_CSV_DIR      = "D:/zhangteng3/points_aftermapmatching/csv"
+	MATCHED_POINT_PARQUET_PATH = "D:/zhangteng3/matched_points/points.parquet"
+	MATCHED_TRACK_PARQUET_PATH = "D:/zhangteng3/matched_points/tracks.bin"
+	MATCHED_POINT_CSV_DIR      = "D:/zhangteng3/matched_points/csv"
 
 	TRACK_RAW_DATA_DIR_PATH     = "D:/zhangteng2/track_raw_data"
 	TRACK_DATA_DIR_PATH         = "D:/zhangteng2/track_data"

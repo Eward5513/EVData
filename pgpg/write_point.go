@@ -9,15 +9,15 @@ import (
 )
 
 type PQPointWriter struct {
-	data     []*proto_struct.TrackPoint
+	data     []*proto_struct.RawPoint
 	filename string
 }
 
 func NewPQWriter(f string) *PQPointWriter {
-	return &PQPointWriter{filename: f, data: make([]*proto_struct.TrackPoint, 0)}
+	return &PQPointWriter{filename: f, data: make([]*proto_struct.RawPoint, 0)}
 }
 
-func (w *PQPointWriter) Write(ps []*proto_struct.TrackPoint) {
+func (w *PQPointWriter) Write(ps []*proto_struct.RawPoint) {
 	w.data = append(w.data, ps...)
 }
 
@@ -37,7 +37,7 @@ func (w *PQPointWriter) Close() {
 	}
 	defer file.Close()
 
-	ww := parquet.NewGenericWriter[*proto_struct.TrackPoint](file, cfg)
+	ww := parquet.NewGenericWriter[*proto_struct.RawPoint](file, cfg)
 	if _, err = ww.Write(w.data); err != nil {
 		common.ErrorLog("error when write parquet file", err)
 	}

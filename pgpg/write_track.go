@@ -2,6 +2,7 @@ package pgpg
 
 import (
 	"EVdata/common"
+	"EVdata/proto_struct"
 	"bufio"
 	"github.com/parquet-go/parquet-go"
 	"github.com/parquet-go/parquet-go/compress/zstd"
@@ -16,8 +17,8 @@ var (
 type PQTrackWriter struct {
 	fileHandle *os.File
 	filename   string
-	gw         *parquet.GenericWriter[*common.Track]
-	data       []*common.Track
+	gw         *parquet.GenericWriter[*proto_struct.Track]
+	data       []*proto_struct.Track
 }
 
 func NewPQTrackWriter(f string) *PQTrackWriter {
@@ -34,11 +35,11 @@ func NewPQTrackWriter(f string) *PQTrackWriter {
 	}
 	wb := bufio.NewWriter(file)
 
-	ww := parquet.NewGenericWriter[*common.Track](wb, cfg)
-	return &PQTrackWriter{filename: f, fileHandle: file, gw: ww, data: make([]*common.Track, 0, WriterBuffer)}
+	ww := parquet.NewGenericWriter[*proto_struct.Track](wb, cfg)
+	return &PQTrackWriter{filename: f, fileHandle: file, gw: ww, data: make([]*proto_struct.Track, 0, WriterBuffer)}
 }
 
-func (w *PQTrackWriter) Write(p *common.Track) {
+func (w *PQTrackWriter) Write(p *proto_struct.Track) {
 	w.data = append(w.data, p)
 	if len(w.data) >= WriterBuffer {
 		if _, err := w.gw.Write(w.data); err != nil {

@@ -19,7 +19,7 @@ func NewTrackWriter(n string) *TrackWriter {
 		common.ErrorLog(err)
 	}
 	w := &TrackWriter{file: f, csvWriter: csv.NewWriter(f)}
-	if err := w.csvWriter.Write(common.TRACK_HEADER); err != nil {
+	if err := w.csvWriter.Write([]string{}); err != nil {
 		common.ErrorLog("Error when writing header", err)
 	}
 	return w

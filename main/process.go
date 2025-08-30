@@ -119,7 +119,7 @@ func WriteDataToCSV(dirPath string, ch chan *common.RawPoint, wg *sync.WaitGroup
 
 	var vin string
 	var csvFile *os.File
-	var csvWriter *CSV.PointWriter
+	var csvWriter *CSV.MatchingPointWriter
 	for {
 		ms := <-ch
 		//log.Println("worker channel", len(ch))
@@ -138,7 +138,7 @@ func WriteDataToCSV(dirPath string, ch chan *common.RawPoint, wg *sync.WaitGroup
 			}
 			n := filepath.Join(dirPath, ms.Vin+".csv")
 			csvFile, _ = os.Create(n)
-			csvWriter = CSV.NewPointWriter(csvFile)
+			csvWriter = CSV.NewMatchingPointWriter(csvFile)
 			//log.Println("create new file:", n)
 		}
 		//if err := csvWriter.Write(ms); err != nil {

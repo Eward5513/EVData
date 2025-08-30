@@ -5,8 +5,8 @@ option go_package = ".;proto_struct";
 package track;
 
 // 轨迹点信息
-message TrackPoint {
-  int32 id = 1;                // 车辆识别号
+message RawPoint {
+  int32 vin = 1;                // 车辆识别号
   string time = 2;    // 采集时间戳
   double speed = 3;              // 日期
   double longitude = 4;         // 时间戳字符串
@@ -16,12 +16,7 @@ message TrackPoint {
   int32 have_brake = 8;          // 纬度
   int32 accelerator_pedal=9;
   int32 brake_status=10;
-
-  double matched_lon=11;
-  double matched_lat=12;
-  int64 road_id=13;
-  int32 track_id=14;
-  int64 time_int=15;
+  int64 time_int=11;
 }
 
 message MatchingPoint{
@@ -30,11 +25,12 @@ message MatchingPoint{
   double matched_lon=3;
   double matched_lat=4;
   int64 road_id=5;
+  int32 isBad=6;
 }
 
 // 完整轨迹信息
 message Track {
-  int32 id = 1;                // 车辆识别号
+  int32 vin = 1;                // 车辆识别号
   int32 tid = 2;                // 轨迹ID
   repeated MatchingPoint mps = 3;     // 轨迹点列表
   double probability = 4;       // 概率值

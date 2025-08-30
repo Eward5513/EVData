@@ -1,13 +1,14 @@
 package main
 
 import (
+	"EVdata/CSV"
 	"EVdata/common"
-	"EVdata/pgpg"
 	"EVdata/proto_struct"
-	"EVdata/proto_tools"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -23,24 +24,8 @@ type PointRequest struct {
 }
 
 // 响应体结构
-type TrackResponse struct {
-	Data []proto_struct.TrackPoint `json:"track"`
-}
-
-type TrackRequest struct {
-	StartTime    string  `json:"startTime"`
-	EndTime      string  `json:"endTime"`
-	Vin          []int   `json:"vin"`
-	MaxLatitude  float64 `json:"maxLatitude"`
-	MaxLongitude float64 `json:"maxLongitude"`
-	MinLatitude  float64 `json:"minLatitude"`
-	MinLongitude float64 `json:"minLongitude"`
-	Milliseconds int64
-}
-
-// 响应体结构
 type PointResponse struct {
-	Data []proto_struct.TrackPoint `json:"points"`
+	Data []proto_struct.RawPoint `json:"points"`
 }
 
 type channelRequest struct {
@@ -51,16 +36,16 @@ type channelRequest struct {
 
 type ServerWorker struct {
 	OrderCh   []chan *channelRequest
-	ReceiveCh chan []*proto_struct.TrackPoint
+	ReceiveCh chan []*proto_struct.RawPoint
 	wg        *sync.WaitGroup
-	data      [][]*proto_struct.TrackPoint
+	data      [][]*proto_struct.RawPoint
 }
 
 func NewServerWorker() *ServerWorker {
 	sw := &ServerWorker{}
 	sw.OrderCh = make([]chan *channelRequest, common.SERVER_WORKER_COUNT)
-	sw.ReceiveCh = make(chan []*proto_struct.TrackPoint)
-	sw.data = make([][]*proto_struct.TrackPoint, common.VEHICLE_COUNT+1)
+	sw.ReceiveCh = make(chan []*proto_struct.RawPoint)
+	sw.data = make([][]*proto_struct.RawPoint, common.VEHICLE_COUNT+1)
 	sw.wg = &sync.WaitGroup{}
 	for i := 0; i < common.SERVER_WORKER_COUNT; i++ {
 		sw.OrderCh[i] = make(chan *channelRequest, 256)
@@ -69,7 +54,7 @@ func NewServerWorker() *ServerWorker {
 }
 
 func (sw *ServerWorker) Init() {
-	sw.data = pgpg.ReadPointFromParquet(common.RAW_POINT_PARQUET_PATH)
+	//sw.data = pgpg.ReadPointFromParquet(common.RAW_POINT_PARQUET_PATH)
 
 	for i := 0; i < common.SERVER_WORKER_COUNT; i++ {
 		go sw.work(sw.OrderCh[i], i)
@@ -78,7 +63,7 @@ func (sw *ServerWorker) Init() {
 
 func (sw *ServerWorker) Start() {
 	http.HandleFunc("/api/point", sw.PointHandler)
-	http.HandleFunc("/api/queryTrack", sw.TrackQueryHandler)
+	http.HandleFunc("/api/track", sw.TrackHandler)
 
 	// 启动 Golang 后端
 	log.Println("Golang backend is running on http://127.0.0.1:3000")
@@ -148,7 +133,7 @@ func (sw *ServerWorker) PointHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	response := PointResponse{Data: make([]proto_struct.TrackPoint, 0, targetCount)}
+	response := PointResponse{Data: make([]proto_struct.RawPoint, 0, targetCount)}
 	var cnt int
 	for ps := range sw.ReceiveCh {
 		for _, p := range ps {
@@ -158,10 +143,10 @@ func (sw *ServerWorker) PointHandler(w http.ResponseWriter, r *http.Request) {
 					p.Latitude >= request.MinLatitude &&
 					p.Longitude <= request.MaxLongitude &&
 					p.Longitude >= request.MinLongitude) {
-				response.Data = append(response.Data, proto_struct.TrackPoint{
+				response.Data = append(response.Data, proto_struct.RawPoint{
 					Latitude:  p.Latitude,
 					Longitude: p.Longitude,
-					Id:        p.Id,
+					Vin:       p.Vin,
 					Time:      p.Time,
 				})
 			}
@@ -180,20 +165,20 @@ func (sw *ServerWorker) PointHandler(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(response)
 }
 
-type TrackQueryRequest struct {
+type TrackRequest struct {
 	Vin         int    `json:"vin"`
 	Tid         int    `json:"tid"`
 	CurrentTime string `json:"currentTime"`
 }
 
 // 轨迹查询响应结构
-type TrackQueryResponse struct {
+type TrackResponse struct {
 	Data []*proto_struct.Track `json:"tracks"`
 }
 
-func (sw *ServerWorker) TrackQueryHandler(w http.ResponseWriter, r *http.Request) {
+func (sw *ServerWorker) TrackHandler(w http.ResponseWriter, r *http.Request) {
 
-	log.Println("TrackQueryHandler")
+	log.Println("TrackHandler")
 
 	// 检查请求方法是否为 POST
 	if r.Method != http.MethodPost {
@@ -207,7 +192,7 @@ func (sw *ServerWorker) TrackQueryHandler(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Access-Control-Expose-Headers", "Access-Control-Allow-Origin,Content-Type")
 
 	// 解析请求体
-	var request TrackQueryRequest
+	var request TrackRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -215,11 +200,17 @@ func (sw *ServerWorker) TrackQueryHandler(w http.ResponseWriter, r *http.Request
 	defer r.Body.Close()
 
 	// 读取轨迹数据
-	tr := proto_tools.ReadTrackFromProto(common.MATCHED_TRACK_PARQUET_PATH)
+	mps := CSV.ReadMatchingPointFromCSV(filepath.Join(common.MATCHED_POINT_CSV_DIR, fmt.Sprintf("%d_%d.csv", request.Vin, request.Tid)))
+
+	t := &proto_struct.Track{
+		Vin: int32(request.Vin),
+		Tid: int32(request.Tid),
+		Mps: mps,
+	}
 
 	// 构建响应
-	response := TrackQueryResponse{
-		Data: tr,
+	response := TrackResponse{
+		Data: []*proto_struct.Track{t},
 	}
 
 	// 返回响应
@@ -232,12 +223,12 @@ func (sw *ServerWorker) TrackQueryHandler(w http.ResponseWriter, r *http.Request
 }
 
 func (sw *ServerWorker) work(ch chan *channelRequest, cnt int) {
-	var points []*proto_struct.TrackPoint
+	var points []*proto_struct.RawPoint
 
 	sw.wg.Add(1)
 	defer sw.wg.Done()
 
-	targetPoints := make([]*proto_struct.TrackPoint, 0)
+	targetPoints := make([]*proto_struct.RawPoint, 0)
 
 	log.Println("worker start", cnt)
 
@@ -279,7 +270,7 @@ func (sw *ServerWorker) work(ch chan *channelRequest, cnt int) {
 					//}
 					//取多个点时需要去重
 					if points[i].TimeInt >= startTimeInt && (targetPtr == -1 || (targetPoints[targetPtr].Longitude != points[i].Longitude && targetPoints[targetPtr].Latitude != points[i].Latitude)) {
-						points[i].Id = int32(ts.vin)
+						points[i].Vin = int32(ts.vin)
 						targetPoints = append(targetPoints, points[i])
 						targetPtr++
 					}

@@ -43,7 +43,7 @@ func validatePoint(pointID int) {
 	if err != nil {
 		log.Fatal("Unable to create file", err.Error())
 	}
-	w := CSV.NewPointWriter(wf)
+	w := CSV.NewMatchingPointWriter(wf)
 	rows := pgpg.ReadTrackPointFromParquet(filepath.Join(basePath, strconv.Itoa(pointID)+".prob"))
 	log.Println(len(rows), rows[0].Vin)
 	for _, row := range rows {

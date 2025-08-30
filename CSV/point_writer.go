@@ -7,42 +7,34 @@ import (
 	"os"
 )
 
-var PointHeaders = []string{
-	"id",
-	"time",
-	"speed",
+var pointHeaders = []string{
 	"longitude",
 	"latitude",
-	"vehicle_status",
-	"have_driver",
-	"have_brake",
-	"accelerator_pedal",
-	"brake_status",
 	"matched_lon",
 	"matched_lat",
 	"road_id",
-	"track_id",
+	"is_bad",
 }
 
-type PointWriter struct {
+type MatchingPointWriter struct {
 	csvWriter *csv.Writer
 	file      *os.File
 }
 
-func NewPointWriter(path string) *PointWriter {
+func NewMatchingPointWriter(path string) *MatchingPointWriter {
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0744)
 	if err != nil {
 		common.ErrorLog("Failed to create file:", err)
 	}
 
-	w := &PointWriter{file: f, csvWriter: csv.NewWriter(f)}
-	if err := w.csvWriter.Write(PointHeaders); err != nil {
+	w := &MatchingPointWriter{file: f, csvWriter: csv.NewWriter(f)}
+	if err := w.csvWriter.Write(pointHeaders); err != nil {
 		common.ErrorLog("Error when writing header", err)
 	}
 	return w
 }
 
-func (w *PointWriter) Write(data []*proto_struct.TrackPoint) {
+func (w *MatchingPointWriter) Write(data []*proto_struct.MatchingPoint) {
 	if data == nil || len(data) == 0 {
 		common.ErrorLog("data is nil")
 		return

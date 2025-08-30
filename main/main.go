@@ -99,7 +99,7 @@ func CreateNewRawData() {
 	if wFile, err = os.OpenFile(csvFileName, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0744); err != nil {
 		log.Fatalln("Failed to create file:", err)
 	}
-	writer := CSV.NewPointWriter(wFile)
+	writer := CSV.NewMatchingPointWriter(wFile)
 	writerCh := make(chan []*common.RawPoint, 1000)
 	wg := &sync.WaitGroup{}
 

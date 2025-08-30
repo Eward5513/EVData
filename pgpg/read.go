@@ -34,7 +34,7 @@ func GetMetaData1(filename string) {
 	}
 }
 
-func ReadPointFromParquet(filename string) [][]*proto_struct.TrackPoint {
+func ReadPointFromParquet(filename string) [][]*proto_struct.RawPoint {
 	cfg, err := parquet.NewReaderConfig()
 	if err != nil {
 		log.Fatal(err)
@@ -48,47 +48,17 @@ func ReadPointFromParquet(filename string) [][]*proto_struct.TrackPoint {
 	reader := parquet.NewReader(file, cfg)
 
 	numRows := reader.NumRows()
-	rows := make([][]*proto_struct.TrackPoint, common.VEHICLE_COUNT+1)
+	rows := make([][]*proto_struct.RawPoint, common.VEHICLE_COUNT+1)
 	var i int64
 	for i = 0; i < numRows; i++ {
-		var vehicle proto_struct.TrackPoint
-		err = reader.Read(&vehicle)
+		vehicle := common.GetRawPoint()
+		err = reader.Read(vehicle)
 		vehicle.TimeInt = common.ParseTimeToInt(vehicle.Time)
 		if err != nil {
 			log.Println("error when reading data", err)
 		}
-		rows[vehicle.Id] = append(rows[vehicle.Id], &vehicle)
+		rows[vehicle.Vin] = append(rows[vehicle.Vin], vehicle)
 	}
-	return rows
-}
-
-func ReadTrackFromParquet(filename string) []*common.Track {
-	common.InfoLog("reading file", filename)
-	//start := time.Now()
-	cfg, err := parquet.NewReaderConfig()
-	if err != nil {
-		log.Fatal(err)
-	}
-	file, err := os.Open(filename)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
-
-	reader := parquet.NewReader(file, cfg)
-
-	numRows := reader.NumRows()
-	rows := make([]*common.Track, numRows)
-	var i int64
-	for i = 0; i < numRows; i++ {
-		var vehicle common.Track
-		err = reader.Read(&vehicle)
-		if err != nil {
-			common.ErrorLog("error when reading data", err)
-		}
-		rows[i] = &vehicle
-	}
-	//common.InfoLog("time for reading file", time.Since(start))
 	return rows
 }
 
@@ -102,7 +72,7 @@ func ReadFile(filename string) {
 		log.Fatal(err)
 	}
 	log.Println("start reading file")
-	rows, err := parquet.Read[common.TrackPoint](file, st.Size())
+	rows, err := parquet.Read[common.RawPoint](file, st.Size())
 	log.Println(rows[0], len(rows))
 	log.Println("finished reading file")
 	if err != nil {

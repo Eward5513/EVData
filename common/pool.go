@@ -8,6 +8,7 @@ import (
 type MemoryMap struct {
 	m1 map[*proto_struct.Track]bool
 	m2 map[*proto_struct.MatchingPoint]bool
+	m3 map[*proto_struct.RawPoint]bool
 	m4 map[*CandidatePoint]bool
 }
 
@@ -15,6 +16,7 @@ func NewMemoryMap() *MemoryMap {
 	return &MemoryMap{
 		m1: make(map[*proto_struct.Track]bool),
 		m2: make(map[*proto_struct.MatchingPoint]bool),
+		m3: make(map[*proto_struct.RawPoint]bool),
 		m4: make(map[*CandidatePoint]bool),
 	}
 }
@@ -27,26 +29,81 @@ func (m *MemoryMap) Clear() {
 	for p := range m.m2 {
 		matchingPointPool.Put(p)
 	}
+
+	for p := range m.m3 {
+		rawPointPool.Put(p)
+	}
 	for t := range m.m1 {
-		t.Tps = make([]*proto_struct.MatchingPoint, 0)
+		t.Mps = make([]*proto_struct.MatchingPoint, 0)
 		trackPool.Put(t)
 	}
+
+	m.m1 = make(map[*proto_struct.Track]bool)
+	m.m2 = make(map[*proto_struct.MatchingPoint]bool)
+	m.m3 = make(map[*proto_struct.RawPoint]bool)
+	m.m4 = make(map[*CandidatePoint]bool)
+}
+
+func (m *MemoryMap) RecordRawPoints(ps []*proto_struct.RawPoint) {
+	for _, p := range ps {
+		m.m3[p] = true
+	}
+
 }
 
 var trackPool = sync.Pool{
 	New: func() interface{} {
 		return &proto_struct.Track{
-			Tps: make([]*proto_struct.MatchingPoint, 0),
+			Mps: make([]*proto_struct.MatchingPoint, 0),
 		}
 	},
 }
 
-func GetTrack(mmp *MemoryMap) *proto_struct.Track {
+func (m *MemoryMap) GetTrack() *proto_struct.Track {
+	t := GetTrack()
+	m.m1[t] = true
+	return t
+}
+
+func GetTrack() *proto_struct.Track {
 	t := trackPool.Get().(*proto_struct.Track)
-	if mmp != nil {
-		mmp.m1[t] = true
+	t.Mps = make([]*proto_struct.MatchingPoint, 0)
+	t.Tid = 0
+	t.Probability = 0
+	t.Vin = 0
+	return t
+}
+
+func PutTrack(t *proto_struct.Track) {
+	for _, mp := range t.Mps {
+		matchingPointPool.Put(mp)
 	}
-	t.Tps = make([]*proto_struct.MatchingPoint, 0)
+	t.Tid = 0
+	t.Probability = 0
+	t.Vin = 0
+	t.Mps = make([]*proto_struct.MatchingPoint, 0)
+	trackPool.Put(t)
+}
+
+var rawPointPool = sync.Pool{
+	New: func() interface{} {
+		return &proto_struct.RawPoint{}
+	},
+}
+
+func GetRawPoint() *proto_struct.RawPoint {
+	t := rawPointPool.Get().(*proto_struct.RawPoint)
+
+	t.Vin = 0
+	t.Speed = 0
+	t.Latitude = 0
+	t.Longitude = 0
+	t.VehicleStatus = 0
+	t.HaveBrake = 0
+	t.HaveBrake = 0
+	t.AcceleratorPedal = 0
+	t.BrakeStatus = 0
+
 	return t
 }
 
@@ -56,13 +113,17 @@ var candidatePointPool = sync.Pool{
 	},
 }
 
-func GetCandidatePoint(mmp *MemoryMap) *CandidatePoint {
+func (m *MemoryMap) GetCandidatePoint() *CandidatePoint {
 	cp := candidatePointPool.Get().(*CandidatePoint)
-	if mmp != nil {
-		mmp.m4[cp] = true
-	}
+	m.m4[cp] = true
 	cp.Lat = 0
 	cp.Lon = 0
+	cp.OriginalPoint = nil
+	cp.RoadID = 0
+	cp.Ep = 0
+	cp.Distance = 0
+	cp.Vertex = nil
+	cp.TT = 0
 	return cp
 }
 
@@ -72,11 +133,14 @@ var matchingPointPool = sync.Pool{
 	},
 }
 
-func GetMatchingPoint(mmp *MemoryMap) *proto_struct.MatchingPoint {
+func (m *MemoryMap) GetMatchingPoint() *proto_struct.MatchingPoint {
+	p := GetMatchingPoint()
+	m.m2[p] = true
+	return p
+}
+
+func GetMatchingPoint() *proto_struct.MatchingPoint {
 	p := matchingPointPool.Get().(*proto_struct.MatchingPoint)
-	if mmp != nil {
-		mmp.m2[p] = true
-	}
 	p.RoadId = 0
 	p.OriginalLat = 0
 	p.OriginalLon = 0

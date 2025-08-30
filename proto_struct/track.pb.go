@@ -22,9 +22,9 @@ const (
 )
 
 // 轨迹点信息
-type TrackPoint struct {
+type RawPoint struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
-	Id               int32                  `parquet:"id" protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`                                            // 车辆识别号
+	Vin               int32                  `parquet:"id" protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`                                            // 车辆识别号
 	Time             string                 `parquet:"time" protobuf:"bytes,2,opt,name=time,proto3" json:"time,omitempty"`                                         // 采集时间戳
 	Speed            float64                `parquet:"speed" protobuf:"fixed64,3,opt,name=speed,proto3" json:"speed,omitempty"`                                     // 日期
 	Longitude        float64                `parquet:"longitude" protobuf:"fixed64,4,opt,name=longitude,proto3" json:"longitude,omitempty"`                             // 时间戳字符串
@@ -34,29 +34,25 @@ type TrackPoint struct {
 	HaveBrake        int32                  `parquet:"havebrake" protobuf:"varint,8,opt,name=have_brake,json=haveBrake,proto3" json:"have_brake,omitempty"`             // 纬度
 	AcceleratorPedal int32                  `parquet:"acceleratorpedal" protobuf:"varint,9,opt,name=accelerator_pedal,json=acceleratorPedal,proto3" json:"accelerator_pedal,omitempty"`
 	BrakeStatus      int32                  `parquet:"brakestatus" protobuf:"varint,10,opt,name=brake_status,json=brakeStatus,proto3" json:"brake_status,omitempty"`
-	MatchedLon       float64                `parquet:"matched_longitude" protobuf:"fixed64,11,opt,name=matched_lon,json=matchedLon,proto3" json:"matched_lon,omitempty"`
-	MatchedLat       float64                `protobuf:"fixed64,12,opt,name=matched_lat,json=matchedLat,proto3" json:"matched_lat,omitempty"`
-	RoadId           int64                  `protobuf:"varint,13,opt,name=road_id,json=roadId,proto3" json:"road_id,omitempty"`
-	TrackId          int32                  `protobuf:"varint,14,opt,name=track_id,json=trackId,proto3" json:"track_id,omitempty"`
-	TimeInt          int64                  `protobuf:"varint,15,opt,name=time_int,json=timeInt,proto3" json:"time_int,omitempty"`
+	TimeInt          int64                  `protobuf:"varint,11,opt,name=time_int,json=timeInt,proto3" json:"time_int,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
 
-func (x *TrackPoint) Reset() {
-	*x = TrackPoint{}
+func (x *RawPoint) Reset() {
+	*x = RawPoint{}
 	mi := &file_track_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *TrackPoint) String() string {
+func (x *RawPoint) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*TrackPoint) ProtoMessage() {}
+func (*RawPoint) ProtoMessage() {}
 
-func (x *TrackPoint) ProtoReflect() protoreflect.Message {
+func (x *RawPoint) ProtoReflect() protoreflect.Message {
 	mi := &file_track_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -68,110 +64,82 @@ func (x *TrackPoint) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use TrackPoint.ProtoReflect.Descriptor instead.
-func (*TrackPoint) Descriptor() ([]byte, []int) {
+// Deprecated: Use RawPoint.ProtoReflect.Descriptor instead.
+func (*RawPoint) Descriptor() ([]byte, []int) {
 	return file_track_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *TrackPoint) GetId() int32 {
+func (x *RawPoint) GetVin() int32 {
 	if x != nil {
-		return x.Id
+		return x.Vin
 	}
 	return 0
 }
 
-func (x *TrackPoint) GetTime() string {
+func (x *RawPoint) GetTime() string {
 	if x != nil {
 		return x.Time
 	}
 	return ""
 }
 
-func (x *TrackPoint) GetSpeed() float64 {
+func (x *RawPoint) GetSpeed() float64 {
 	if x != nil {
 		return x.Speed
 	}
 	return 0
 }
 
-func (x *TrackPoint) GetLongitude() float64 {
+func (x *RawPoint) GetLongitude() float64 {
 	if x != nil {
 		return x.Longitude
 	}
 	return 0
 }
 
-func (x *TrackPoint) GetLatitude() float64 {
+func (x *RawPoint) GetLatitude() float64 {
 	if x != nil {
 		return x.Latitude
 	}
 	return 0
 }
 
-func (x *TrackPoint) GetVehicleStatus() int32 {
+func (x *RawPoint) GetVehicleStatus() int32 {
 	if x != nil {
 		return x.VehicleStatus
 	}
 	return 0
 }
 
-func (x *TrackPoint) GetHaveDriver() int32 {
+func (x *RawPoint) GetHaveDriver() int32 {
 	if x != nil {
 		return x.HaveDriver
 	}
 	return 0
 }
 
-func (x *TrackPoint) GetHaveBrake() int32 {
+func (x *RawPoint) GetHaveBrake() int32 {
 	if x != nil {
 		return x.HaveBrake
 	}
 	return 0
 }
 
-func (x *TrackPoint) GetAcceleratorPedal() int32 {
+func (x *RawPoint) GetAcceleratorPedal() int32 {
 	if x != nil {
 		return x.AcceleratorPedal
 	}
 	return 0
 }
 
-func (x *TrackPoint) GetBrakeStatus() int32 {
+func (x *RawPoint) GetBrakeStatus() int32 {
 	if x != nil {
 		return x.BrakeStatus
 	}
 	return 0
 }
 
-func (x *TrackPoint) GetMatchedLon() float64 {
-	if x != nil {
-		return x.MatchedLon
-	}
-	return 0
-}
-
-func (x *TrackPoint) GetMatchedLat() float64 {
-	if x != nil {
-		return x.MatchedLat
-	}
-	return 0
-}
-
-func (x *TrackPoint) GetRoadId() int64 {
-	if x != nil {
-		return x.RoadId
-	}
-	return 0
-}
-
-func (x *TrackPoint) GetTrackId() int32 {
-	if x != nil {
-		return x.TrackId
-	}
-	return 0
-}
-
-func (x *TrackPoint) GetTimeInt() int64 {
+func (x *RawPoint) GetTimeInt() int64 {
 	if x != nil {
 		return x.TimeInt
 	}
@@ -185,6 +153,7 @@ type MatchingPoint struct {
 	MatchedLon    float64                `protobuf:"fixed64,3,opt,name=matched_lon,json=matchedLon,proto3" json:"matched_lon,omitempty"`
 	MatchedLat    float64                `protobuf:"fixed64,4,opt,name=matched_lat,json=matchedLat,proto3" json:"matched_lat,omitempty"`
 	RoadId        int64                  `protobuf:"varint,5,opt,name=road_id,json=roadId,proto3" json:"road_id,omitempty"`
+	IsBad         int32                  `protobuf:"varint,6,opt,name=isBad,proto3" json:"isBad,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -254,10 +223,17 @@ func (x *MatchingPoint) GetRoadId() int64 {
 	return 0
 }
 
+func (x *MatchingPoint) GetIsBad() int32 {
+	if x != nil {
+		return x.IsBad
+	}
+	return 0
+}
+
 // 完整轨迹信息
 type Track struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int32                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`                    // 车辆识别号
+	Vin           int32                  `protobuf:"varint,1,opt,name=vin,proto3" json:"vin,omitempty"`                  // 车辆识别号
 	Tid           int32                  `protobuf:"varint,2,opt,name=tid,proto3" json:"tid,omitempty"`                  // 轨迹ID
 	Mps           []*MatchingPoint       `protobuf:"bytes,3,rep,name=mps,proto3" json:"mps,omitempty"`                   // 轨迹点列表
 	Probability   float64                `protobuf:"fixed64,4,opt,name=probability,proto3" json:"probability,omitempty"` // 概率值
@@ -295,9 +271,9 @@ func (*Track) Descriptor() ([]byte, []int) {
 	return file_track_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *Track) GetId() int32 {
+func (x *Track) GetVin() int32 {
 	if x != nil {
-		return x.Id
+		return x.Vin
 	}
 	return 0
 }
@@ -327,10 +303,9 @@ var File_track_proto protoreflect.FileDescriptor
 
 const file_track_proto_rawDesc = "" +
 	"\n" +
-	"\vtrack.proto\x12\x05track\"\xc8\x03\n" +
-	"\n" +
-	"TrackPoint\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x05R\x02id\x12\x12\n" +
+	"\vtrack.proto\x12\x05track\"\xd2\x02\n" +
+	"\bRawPoint\x12\x10\n" +
+	"\x03vin\x18\x01 \x01(\x05R\x03vin\x12\x12\n" +
 	"\x04time\x18\x02 \x01(\tR\x04time\x12\x14\n" +
 	"\x05speed\x18\x03 \x01(\x01R\x05speed\x12\x1c\n" +
 	"\tlongitude\x18\x04 \x01(\x01R\tlongitude\x12\x1a\n" +
@@ -342,14 +317,8 @@ const file_track_proto_rawDesc = "" +
 	"have_brake\x18\b \x01(\x05R\thaveBrake\x12+\n" +
 	"\x11accelerator_pedal\x18\t \x01(\x05R\x10acceleratorPedal\x12!\n" +
 	"\fbrake_status\x18\n" +
-	" \x01(\x05R\vbrakeStatus\x12\x1f\n" +
-	"\vmatched_lon\x18\v \x01(\x01R\n" +
-	"matchedLon\x12\x1f\n" +
-	"\vmatched_lat\x18\f \x01(\x01R\n" +
-	"matchedLat\x12\x17\n" +
-	"\aroad_id\x18\r \x01(\x03R\x06roadId\x12\x19\n" +
-	"\btrack_id\x18\x0e \x01(\x05R\atrackId\x12\x19\n" +
-	"\btime_int\x18\x0f \x01(\x03R\atimeInt\"\xb0\x01\n" +
+	" \x01(\x05R\vbrakeStatus\x12\x19\n" +
+	"\btime_int\x18\v \x01(\x03R\atimeInt\"\xc6\x01\n" +
 	"\rMatchingPoint\x12!\n" +
 	"\foriginal_lon\x18\x01 \x01(\x01R\voriginalLon\x12!\n" +
 	"\foriginal_lat\x18\x02 \x01(\x01R\voriginalLat\x12\x1f\n" +
@@ -357,9 +326,10 @@ const file_track_proto_rawDesc = "" +
 	"matchedLon\x12\x1f\n" +
 	"\vmatched_lat\x18\x04 \x01(\x01R\n" +
 	"matchedLat\x12\x17\n" +
-	"\aroad_id\x18\x05 \x01(\x03R\x06roadId\"s\n" +
-	"\x05Track\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x05R\x02id\x12\x10\n" +
+	"\aroad_id\x18\x05 \x01(\x03R\x06roadId\x12\x14\n" +
+	"\x05isBad\x18\x06 \x01(\x05R\x05isBad\"u\n" +
+	"\x05Track\x12\x10\n" +
+	"\x03vin\x18\x01 \x01(\x05R\x03vin\x12\x10\n" +
 	"\x03tid\x18\x02 \x01(\x05R\x03tid\x12&\n" +
 	"\x03mps\x18\x03 \x03(\v2\x14.track.MatchingPointR\x03mps\x12 \n" +
 	"\vprobability\x18\x04 \x01(\x01R\vprobabilityB\x10Z\x0e.;proto_structb\x06proto3"
@@ -378,7 +348,7 @@ func file_track_proto_rawDescGZIP() []byte {
 
 var file_track_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_track_proto_goTypes = []any{
-	(*TrackPoint)(nil),    // 0: track.TrackPoint
+	(*RawPoint)(nil),      // 0: track.RawPoint
 	(*MatchingPoint)(nil), // 1: track.MatchingPoint
 	(*Track)(nil),         // 2: track.Track
 }

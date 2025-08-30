@@ -25,7 +25,7 @@ type CandidatePoint struct {
 	Lat, Lon      float64
 	Ep            float64
 	RoadID        int64
-	OriginalPoint *proto_struct.TrackPoint
+	OriginalPoint *proto_struct.RawPoint
 }
 
 type CandidateSet struct {

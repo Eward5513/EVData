@@ -109,7 +109,7 @@ func WriteDataToCSV(dirPath string, ch chan *common.TrackPoint, wg *sync.WaitGro
 	common.InfoLog("worker starts:", dirPath)
 	defer wg.Done()
 
-	var csvWriter *CSV.PointWriter
+	var csvWriter *CSV.MatchingPointWriter
 	for {
 		ms := <-ch
 		//log.Println("worker channel", len(ch))
@@ -122,7 +122,7 @@ func WriteDataToCSV(dirPath string, ch chan *common.TrackPoint, wg *sync.WaitGro
 		if err != nil {
 			common.ErrorLog(err)
 		}
-		csvWriter = CSV.NewPointWriter(fi)
+		csvWriter = CSV.NewMatchingPointWriter(fi)
 		csvWriter.Write(ms)
 		csvWriter.Close()
 	}
