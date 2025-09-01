@@ -1,4 +1,4 @@
-package main_test
+package mapmatching_test
 
 import (
 	"testing"
@@ -11,3 +11,8 @@ func TestMapmatching(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Mapmatching Suite")
 }
+
+var _ = BeforeSuite(func() {
+	// 这里写全局初始化逻辑
+	println("BeforeSuite: 全局初始化一次")
+})

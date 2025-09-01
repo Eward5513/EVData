@@ -89,11 +89,11 @@ func CreateNewRawData() {
 		log.Fatalln("Failed to clear folder:", err)
 	}
 
-	if err := common.ClearFolder(common.POINT_DATA_DIR_PATH); err != nil {
+	if err := common.ClearFolder(common.RAW_POINT_CSV_DIR_PATH); err != nil {
 		log.Fatalln("Failed to clear folder:", err)
 	}
 
-	csvFileName := filepath.Join(common.POINT_DATA_DIR_PATH, "points.csv")
+	csvFileName := filepath.Join(common.RAW_POINT_CSV_DIR_PATH, "points.csv")
 	var wFile *os.File
 	var err error
 	if wFile, err = os.OpenFile(csvFileName, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0744); err != nil {

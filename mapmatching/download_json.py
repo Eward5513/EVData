@@ -2,7 +2,7 @@ import requests
 import json
 import time
 
-def download_overpass_data(polygon_coords, output_file="shanghai.json"):
+def download_overpass_data( output_file="shanghai_new.json"):
     # Overpass API 端点
     overpass_url = "https://overpass-api.de/api/interpreter"
     
@@ -10,7 +10,7 @@ def download_overpass_data(polygon_coords, output_file="shanghai.json"):
     query = f"""
 [out:json][timeout:3000];
 // 查询边界内的所有way
-way["highway"~"motorway|trunk|primary|secondary|tertiary|residential|unclassified"](poly:"30.6974858 120.8557546 30.6974858 122.0158854 31.8610639 122.0158854 31.8610639 120.8557546");
+way["highway"~"motorway|trunk|primary|secondary|tertiary|residential|unclassified"](poly:"31.2036766 121.1236249 31.2036766 121.3644594 31.3642665 121.3644594 31.3642665 121.1236249");
 out geom;
 node(w);
 // 输出结果
@@ -44,11 +44,8 @@ out skel qt;
         return None
 
 if __name__ == "__main__":
-    # 定义多边形坐标（空格分隔的"lat lon"对）
-    polygon_coords = "30.6974858 120.8557546 30.6974858 122.0158854 31.8610639 122.0158854 31.8610639 120.8557546"
-    
     # 下载数据
-    downloaded_data = download_overpass_data(polygon_coords)
+    downloaded_data = download_overpass_data()
     
     if downloaded_data:
         # 打印一些基本信息

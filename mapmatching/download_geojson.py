@@ -5,7 +5,7 @@ import json
 query = f"""
 [out:json][timeout:3000];
 // 查询边界内的所有way
-way["highway"~"motorway|trunk|primary|secondary|tertiary|residential|unclassified"](poly:"30.6974858 120.8557546 30.6974858 122.0158854 31.8610639 122.0158854 31.8610639 120.8557546");
+way["highway"~"motorway|trunk|primary|secondary|tertiary|residential|unclassified"](poly:"31.2036766 121.1236249 31.2036766 121.3644594 31.3642665 121.3644594 31.3642665 121.1236249");
 // 输出结果
 out body;
 >;
@@ -35,7 +35,7 @@ except ImportError:
     exit(1)
 
 # 写入文件
-output_file = "shanghai_roads.geojson"
+output_file = "shanghai_new.geojson"
 with open(output_file, "w", encoding="utf-8") as f:
     json.dump(geojson_data, f, ensure_ascii=False, indent=2)
 

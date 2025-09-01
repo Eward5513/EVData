@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -64,6 +66,7 @@ func (sw *ServerWorker) Init() {
 func (sw *ServerWorker) Start() {
 	http.HandleFunc("/api/point", sw.PointHandler)
 	http.HandleFunc("/api/track", sw.TrackHandler)
+	http.HandleFunc("/api/generateTrack", sw.GenerateTrackHandler)
 
 	// 启动 Golang 后端
 	log.Println("Golang backend is running on http://127.0.0.1:3000")
@@ -163,6 +166,75 @@ func (sw *ServerWorker) PointHandler(w http.ResponseWriter, r *http.Request) {
 	//返回响应
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(response)
+}
+
+type GenerateTrackRequest struct {
+	Vin       string `json:"vin"`
+	Tid       string `json:"tid"`
+	StartTime string `json:"start_time"`
+	EndTime   string `json:"end_time"`
+}
+
+type GenerateTrackResponse struct {
+	Data []*proto_struct.TrackPoint `json:"track_points"`
+}
+
+func (sw *ServerWorker) GenerateTrackHandler(w http.ResponseWriter, r *http.Request) {
+
+	log.Println("GenerateTrackHandler")
+
+	// 检查请求方法是否为 POST
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json;charset=utf-8")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST")
+	w.Header().Set("Access-Control-Expose-Headers", "Access-Control-Allow-Origin,Content-Type")
+
+	// 解析请求体
+	var request GenerateTrackRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	fp := filepath.Join(common.MATCHED_RAW_POINT_CSV_DIR, request.Vin+"_"+request.Tid+".csv")
+	if _, err := os.Stat(fp); err != nil {
+		http.Error(w, "Invalid Vin or Tid", http.StatusBadRequest)
+		return
+	}
+
+	// 读取轨迹数据
+	mps := CSV.ReadTrackPointFromCSV(fp)
+
+	startTimeInt := common.ParseTimeToInt(request.StartTime)
+	endTimeInt := common.ParseTimeToInt(request.EndTime)
+
+	res := make([]*proto_struct.TrackPoint, 0, len(mps))
+	vinInt, _ := strconv.Atoi(request.Vin)
+	for _, mp := range mps {
+		if mp.TimeInt >= startTimeInt && mp.TimeInt <= endTimeInt {
+			mp.Vin = int32(vinInt)
+			res = append(res, mp)
+		}
+	}
+
+	// 构建响应
+	response := GenerateTrackResponse{
+		Data: res,
+	}
+
+	// 返回响应
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		common.ErrorLog("Error writing response", err)
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
 type TrackRequest struct {

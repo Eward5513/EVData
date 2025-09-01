@@ -9,11 +9,13 @@ import (
 const (
 	RAW_DATA_DIR_PATH          = "D:/data/dataset_origin_anting_hkust"
 	REFINED_RAW_DATA_DIR_PATH  = "D:/zhangteng3/refined_raw_data"
-	POINT_DATA_DIR_PATH        = "D:/zhangteng3/points/csv"
+	RAW_POINT_CSV_DIR_PATH     = "D:/zhangteng3/points/csv"
 	RAW_POINT_PARQUET_PATH     = "D:/zhangteng3/points1/points.parquet"
 	MATCHED_POINT_PARQUET_PATH = "D:/zhangteng3/matched_points/points.parquet"
 	MATCHED_TRACK_PARQUET_PATH = "D:/zhangteng3/matched_points/tracks.bin"
 	MATCHED_POINT_CSV_DIR      = "D:/zhangteng3/matched_points/csv"
+	TRCK_POINT_CSV_DIR         = "D:/zhangteng3/track_points/csv"
+	MATCHED_RAW_POINT_CSV_DIR  = "D:/zhangteng3/matched_raw_points/csv"
 
 	TRACK_RAW_DATA_DIR_PATH     = "D:/zhangteng2/track_raw_data"
 	TRACK_DATA_DIR_PATH         = "D:/zhangteng2/track_data"
@@ -25,7 +27,7 @@ const (
 var (
 	MIN_LATITUDE  float64 = 100
 	MAX_LATITUDE  float64 = 1
-	MIN_LONGITUDE float64 = 100
+	MIN_LONGITUDE float64 = 200
 	MAX_LONGITUDE float64 = 1
 )
 

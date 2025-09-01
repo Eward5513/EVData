@@ -27,7 +27,7 @@ func main() {
 }
 
 func CreateRefinedPointData() {
-	if err := common.CreateDirs(common.POINT_DATA_DIR_PATH); err != nil {
+	if err := common.CreateDirs(common.RAW_POINT_CSV_DIR_PATH); err != nil {
 		log.Fatal("error creating dirs:" + err.Error())
 	}
 
@@ -40,7 +40,7 @@ func CreateRefinedPointData() {
 
 	wg.Wait()
 
-	if err := common.DeleteEmptyDirs(common.POINT_DATA_DIR_PATH); err != nil {
+	if err := common.DeleteEmptyDirs(common.RAW_POINT_CSV_DIR_PATH); err != nil {
 		log.Fatal("error deleting empty dirs:" + err.Error())
 	}
 }
@@ -96,7 +96,7 @@ func CreateCSVWorker(wg *sync.WaitGroup) map[int]chan *common.TrackPoint {
 				ch := make(chan *common.TrackPoint, WRITE_BUFFER_SIZE)
 				register[t] = ch
 				//log.Println("Register ", t)
-				dirPath := filepath.Join(common.POINT_DATA_DIR_PATH, fmt.Sprint(years[y]), fmt.Sprint(m), fmt.Sprint(d))
+				dirPath := filepath.Join(common.RAW_POINT_CSV_DIR_PATH, fmt.Sprint(years[y]), fmt.Sprint(m), fmt.Sprint(d))
 				go WriteDataToCSV(dirPath, ch, wg)
 			}
 		}

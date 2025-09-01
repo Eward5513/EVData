@@ -33,5 +33,25 @@ message Track {
   int32 vin = 1;                // 车辆识别号
   int32 tid = 2;                // 轨迹ID
   repeated MatchingPoint mps = 3;     // 轨迹点列表
-  double probability = 4;       // 概率值
+  repeated RawPoint rps = 4;
+  double probability = 5;       // 概率值
+}
+
+message TrackPoint {
+  int32 vin = 1;                // 车辆识别号
+  string time = 2;    // 采集时间戳
+  double speed = 3;              // 日期
+  double longitude = 4;         // 时间戳字符串
+  double latitude = 5;               // 小时
+  int32 vehicle_status = 6;             // 速度
+  int32 have_driver = 7;         // 经度
+  int32 have_brake = 8;          // 纬度
+  int32 accelerator_pedal=9;
+  int32 brake_status=10;
+  int64 time_int=11;
+
+  double matched_lon=12;
+  double matched_lat=13;
+  int64 road_id=14;
+  int32 isBad=15;
 }

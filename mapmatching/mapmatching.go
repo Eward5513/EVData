@@ -1,4 +1,4 @@
-package main
+package mapmatching
 
 import (
 	"EVdata/CSV"
@@ -6,17 +6,14 @@ import (
 	"EVdata/pgpg"
 	"EVdata/proto_struct"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"log"
 	"math"
-	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 )
 
 // 道路网络数据结构
@@ -38,50 +35,9 @@ type IndexNode struct {
 }
 
 var (
-	workerCount    int
+	WorkerCount    int
 	DistanceOffset float64
 )
-
-func main() {
-
-	begin := time.Now()
-
-	var profMode bool
-	flag.BoolVar(&profMode, "p", false, "pprof mode")
-	flag.Float64Var(&DistanceOffset, "d", 40, "Distance offset")
-	flag.IntVar(&workerCount, "wc", 1000, "worker count")
-	flag.Parse()
-
-	common.CreatLogFile("mapmatching.log")
-	defer common.CloseLogFile()
-
-	if profMode {
-		//common.SetLogLevel(common.DEBUG)
-		go func() {
-			log.Println("start pprof tool")
-			//http://localhost:6060/debug/pprof/
-			log.Println(http.ListenAndServe("localhost:6060", nil))
-		}()
-	}
-
-	common.SetLogLevel(common.INFO)
-
-	t := time.Now()
-	graph := BuildGraph("shanghai_new.json")
-	common.InfoLog("time for building graph: ", time.Since(t))
-	t = time.Now()
-
-	indexRoot := BuildIndex(graph)
-	common.InfoLog("time for building index: ", time.Since(t))
-	t = time.Now()
-
-	PreComputing(graph)
-	common.InfoLog("time for precomputing: ", time.Since(t))
-
-	ProcessDataLoop(indexRoot)
-
-	log.Println("Total Execution time: ", time.Now().Sub(begin))
-}
 
 func ProcessDataLoop(indexRoot *IndexNode) {
 	readerChan := make(chan []*proto_struct.RawPoint, 1000)
@@ -282,30 +238,39 @@ func StartReader(rch chan []*proto_struct.RawPoint) {
 	common.InfoLog("Finish reading parquet file")
 
 	var cnt int
-	//for i := 1; i < len(vps); i++ {
-	//	cnt += len(vps[i])
-	//	if i%1000 == 0 {
-	//		common.InfoLog("Finish reading ", i, " / ", len(vps))
-	//	}
-	//	rch <- vps[i]
-	//}
-	rch <- vps[1]
+	for i := 1; i < len(vps); i++ {
+		cnt += len(vps[i])
+		if i%1000 == 0 {
+			common.InfoLog("Finish reading ", i, " / ", len(vps))
+		}
+		rch <- vps[i]
+	}
+	//rch <- vps[1]
 	close(rch)
 	common.InfoLog("Finish reading ", cnt)
 }
 
 func StartWriterWorker(writerChan chan *proto_struct.Track) {
 	wg := &sync.WaitGroup{}
-	for i := 0; i < workerCount; i++ {
+	for i := 0; i < WorkerCount; i++ {
 		wg.Add(1)
 		go func() {
 			for t := range writerChan {
-				if len(t.Mps) == 0 {
+				if len(t.Mps) == 0 || len(t.Rps) == 0 {
 					common.InfoLog("data is empty")
 					continue
 				}
-				bw := CSV.NewMatchingPointWriter(filepath.Join(common.MATCHED_POINT_CSV_DIR, fmt.Sprintf("%d_%d.csv", t.Vin, t.Tid)))
-				bw.Write(t.Mps)
+				//fp := filepath.Join(common.MATCHED_POINT_CSV_DIR, fmt.Sprintf("%d_%d.csv", t.Vin, t.Tid))
+				//data := make([][]string, 0, len(t.Mps))
+				//for _, p := range t.Mps {
+				//	data = append(data, p.ToCSV())
+				//}
+				//CSV.Write(fp, proto_struct.MatchingPointHeader, data)
+
+				fp := filepath.Join(common.MATCHED_RAW_POINT_CSV_DIR, fmt.Sprintf("%d_%d.csv", t.Vin, t.Tid))
+				data := MergePoints(t.Mps, t.Rps)
+				CSV.Write(fp, proto_struct.TrackPointHeader, data)
+
 				//common.InfoLog("Finish writing ", t.Vin, t.Tid)
 				common.PutTrack(t)
 			}
@@ -315,11 +280,40 @@ func StartWriterWorker(writerChan chan *proto_struct.Track) {
 	wg.Wait()
 }
 
+func MergePoints(mps []*proto_struct.MatchingPoint, rps []*proto_struct.RawPoint) [][]string {
+	res := make([][]string, 0, len(mps)+len(rps))
+
+	x, y, i, j := 0, 0, 0, 0
+	for i, j = 0, 0; j < len(mps) && i < len(rps); {
+		x, y = i, j
+		if rps[i].Latitude == mps[j].OriginalLat && rps[i].Longitude == mps[j].OriginalLon {
+			// matched
+			i++
+		} else if j < len(mps)-1 && rps[i].Latitude == mps[j+1].OriginalLat && rps[i].Longitude == mps[j+1].OriginalLon {
+			// move to the next matching point
+			j++
+			i++
+			y = j
+		} else {
+			// added matching points
+			j++
+		}
+		row := make([]string, 0, len(proto_struct.TrackPointHeader))
+		row = append(row, rps[x].ToCSV()...)
+		row = append(row, mps[y].ToCSV()...)
+		res = append(res, row)
+	}
+
+	//common.InfoLog(i, len(mps), j, len(rps))
+
+	return res
+}
+
 func ProcessData(readerChan chan []*proto_struct.RawPoint, writerChan chan *proto_struct.Track, indexRoot *IndexNode) {
 
 	wg := &sync.WaitGroup{}
 
-	for i := 0; i < workerCount; i++ {
+	for i := 0; i < WorkerCount; i++ {
 		wg.Add(1)
 		go Worker(readerChan, writerChan, indexRoot, wg)
 	}
@@ -336,12 +330,23 @@ func Worker(readerChan chan []*proto_struct.RawPoint, writerChan chan *proto_str
 	for msg := range readerChan {
 		//common.InfoLog("worker read", len(msg))
 
-		mmap.RecordRawPoints(msg)
+		//mmap.RecordRawPoints(msg)
 
-		tps := PreProcess(msg)
+		rpss := make([][]*proto_struct.RawPoint, 0)
+		var preTime int64 = -100
+		for _, p := range msg {
+			if p.TimeInt-preTime >= 60 {
+				rpss = append(rpss, []*proto_struct.RawPoint{p})
+			} else {
+				rpss[len(rpss)-1] = append(rpss[len(rpss)-1], p)
+			}
+			preTime = p.TimeInt
+		}
 
-		for tid, ps := range tps {
-			common.InfoLog(tid, len(ps), ps[0].Time)
+		for tid, rps := range rpss {
+			ps := PreProcess(rps)
+
+			//common.InfoLog("Preprocess ", tid, len(rps), len(ps))
 
 			var firstCandi, curCandi *common.CandidateSet
 			for _, p := range ps {
@@ -391,7 +396,6 @@ func Worker(readerChan chan []*proto_struct.RawPoint, writerChan chan *proto_str
 				} else {
 					retry = 0
 				}
-
 			}
 
 			if len(candidateTracks) != 0 {
@@ -411,6 +415,7 @@ func Worker(readerChan chan []*proto_struct.RawPoint, writerChan chan *proto_str
 			}
 
 			ans := DeepCopyTrack(res)
+			ans.Rps = rps
 			//common.InfoLog("send to writer", len(ans.Mps), ans.Vin, ans.Tid)
 			mmap.Clear()
 			writerChan <- ans
@@ -418,23 +423,12 @@ func Worker(readerChan chan []*proto_struct.RawPoint, writerChan chan *proto_str
 	}
 }
 
-func PreProcess(msg []*proto_struct.RawPoint) [][]*proto_struct.RawPoint {
-	var curTime int64 = -1
-	var res [][]*proto_struct.RawPoint
+func PreProcess(msg []*proto_struct.RawPoint) []*proto_struct.RawPoint {
+	var res []*proto_struct.RawPoint
 	for _, p := range msg {
-		//common.InfoLog(curTime, p.TimeInt)
-		if curTime == -1 || p.TimeInt-curTime > 60 {
-			tp := []*proto_struct.RawPoint{p}
-			res = append(res, tp)
-		} else {
-			lastPs := res[len(res)-1]
-			lastP := lastPs[len(lastPs)-1]
-			if lastP.Longitude != p.Longitude && lastP.Latitude != p.Latitude {
-				lastPs = append(lastPs, p)
-				res[len(res)-1] = lastPs
-			}
+		if len(res) == 0 || res[len(res)-1].Longitude != p.Longitude || res[len(res)-1].Latitude != p.Latitude {
+			res = append(res, p)
 		}
-		curTime = p.TimeInt
 	}
 	return res
 }
@@ -465,7 +459,7 @@ func CandidateSearch(p *proto_struct.RawPoint, indexRoot *IndexNode, mmp *common
 			}
 		}
 	}
-	visited := make(map[float64]float64)
+	visited := make(map[string]bool)
 
 	for _, in := range ins {
 		for _, gn := range in.graphNodes {
@@ -485,7 +479,8 @@ func CandidateSearch(p *proto_struct.RawPoint, indexRoot *IndexNode, mmp *common
 					//所有允许范围内的值
 					if dis < do {
 						lat, lon := common.CalP(x1, x2, y1, y2, t)
-						if v, e := visited[lat]; e == false || v != lon {
+						key := fmt.Sprintf("%.6f,%.6f", lat, lon)
+						if !visited[key] {
 							cand := mmp.GetCandidatePoint()
 							cand.Vertex = []*common.GraphNode{gn, way.Node}
 							cand.Ttype = common.NORMAL
@@ -501,7 +496,7 @@ func CandidateSearch(p *proto_struct.RawPoint, indexRoot *IndexNode, mmp *common
 							//if gn.Id == 6697251679 && p.Date == "2022-03-19" && p.Timestamp == "03:49:15" {
 							//	common.InfoLog(gn.Id, way.Node.Id, cand.Lat, cand.Lon)
 							//}
-							visited[lat] = lon
+							visited[key] = true
 						}
 					}
 					//记录最小值
@@ -517,7 +512,8 @@ func CandidateSearch(p *proto_struct.RawPoint, indexRoot *IndexNode, mmp *common
 					//如果不垂直检查端点距离
 					dis = common.Distance(gn.Lat, gn.Lon, p.Latitude, p.Longitude) * common.MAGIC_NUM
 					if dis < do {
-						if v, e := visited[gn.Lat]; e == false || v != gn.Lon {
+						key := fmt.Sprintf("%.6f,%.6f", gn.Lat, gn.Lon)
+						if !visited[key] {
 							cand := mmp.GetCandidatePoint()
 							cand.Vertex = []*common.GraphNode{gn, way.Node}
 							cand.Ttype = common.NORMAL
@@ -531,7 +527,7 @@ func CandidateSearch(p *proto_struct.RawPoint, indexRoot *IndexNode, mmp *common
 							cand.Ep = common.CalEP(dis)
 							cand.RoadID = way.ID
 							candidates = append(candidates, cand)
-							visited[gn.Lat] = gn.Lon
+							visited[key] = true
 						}
 					}
 					//记录最小值
@@ -589,8 +585,8 @@ func AppendTrack(t *proto_struct.Track, p *common.CandidatePoint, pa *common.Pat
 	if pa != nil {
 		for _, gp := range pa.Points {
 			mp := mmap.GetMatchingPoint()
-			mp.OriginalLon = p.OriginalPoint.Longitude
-			mp.OriginalLat = p.OriginalPoint.Latitude
+			mp.OriginalLon = -1
+			mp.OriginalLat = -1
 			mp.MatchedLon = gp.Lon
 			mp.MatchedLat = gp.Lat
 			mp.RoadId = -1
@@ -599,8 +595,8 @@ func AppendTrack(t *proto_struct.Track, p *common.CandidatePoint, pa *common.Pat
 	}
 
 	mp := mmap.GetMatchingPoint()
-	mp.OriginalLon = p.Lon
-	mp.OriginalLat = p.Lat
+	mp.OriginalLon = p.OriginalPoint.Longitude
+	mp.OriginalLat = p.OriginalPoint.Latitude
 	mp.RoadId = p.RoadID
 
 	if p.Ttype == common.DISCRETE {

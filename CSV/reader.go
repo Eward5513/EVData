@@ -10,59 +10,70 @@ import (
 	"strconv"
 )
 
-//func ReadPointFromCSV(path string, id int) []*proto_struct.RawPoint {
-//	file, err := os.Open(path)
-//	if err != nil {
-//		log.Fatal("打开CSV文件失败:", err)
-//	}
-//	defer file.Close()
-//
-//	reader := csv.NewReader(file)
-//	// 跳过表头
-//	if _, err := reader.Read(); err != nil {
-//		log.Println("error when reading csv:", err)
-//	}
-//
-//	var points []*proto_struct.RawPoint
-//	for {
-//		record, err := reader.Read()
-//		if err == io.EOF {
-//			break
-//		}
-//		if err != nil {
-//			log.Println("读取CSV记录失败:", err)
-//		}
-//
-//		speed, err := strconv.ParseFloat(record[1], 64)
-//		if err != nil {
-//			log.Printf("解析speed失败[%s]: %v\n", record[1], err)
-//			continue
-//		}
-//		longitude, err := strconv.ParseFloat(record[3], 64)
-//		if err != nil {
-//			log.Printf("解析longitude失败[%s]: %v\n", record[2], err)
-//			continue
-//		}
-//		latitude, err := strconv.ParseFloat(record[4], 64)
-//		if err != nil {
-//			log.Printf("解析latitude失败[%s]: %v\n", record[3], err)
-//			continue
-//		}
-//
-//		point := &proto_struct.RawPoint{
-//			Vin:        id,
-//			Time:      record[0],
-//			Speed:     speed,
-//			Longitude: longitude,
-//			Latitude:  latitude,
-//			TimeInt:   common.ParseTimeToInt(record[0]),
-//		}
-//		points = append(points, point)
-//	}
-//
-//	//common.InfoLog("成功读取轨迹点数量: %d\n", len(points))
-//	return points
-//}
+func ReadRawPointFromCSV(path string, vin int) []*proto_struct.RawPoint {
+	file, err := os.Open(path)
+	if err != nil {
+		log.Fatal("打开CSV文件失败:", err)
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	// 跳过表头
+	if _, err := reader.Read(); err != nil {
+		log.Println("error when reading csv:", err)
+	}
+
+	var points []*proto_struct.RawPoint
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Println("读取CSV记录失败:", err)
+		}
+
+		speed, err := strconv.ParseFloat(record[1], 64)
+		if err != nil {
+			log.Printf("解析speed失败[%s]: %v\n", record[1], err)
+			continue
+		}
+		vehicleStatus, _ := strconv.Atoi(record[2])
+		haveDriver, _ := strconv.Atoi(record[3])
+		haveBrake, _ := strconv.Atoi(record[4])
+		acceleratorPedal, _ := strconv.Atoi(record[5])
+		brakeStatus, _ := strconv.Atoi(record[6])
+		longitude, err := strconv.ParseFloat(record[8], 64)
+		if err != nil {
+			log.Printf("解析longitude失败[%s]: %v\n", record[2], err)
+			continue
+		}
+		latitude, err := strconv.ParseFloat(record[9], 64)
+		if err != nil {
+			log.Printf("解析latitude失败[%s]: %v\n", record[3], err)
+			continue
+		}
+
+		point := &proto_struct.RawPoint{
+			Vin:              int32(vin),
+			Time:             record[0],
+			Speed:            speed,
+			VehicleStatus:    int32(vehicleStatus),
+			HaveDriver:       int32(haveDriver),
+			HaveBrake:        int32(haveBrake),
+			AcceleratorPedal: int32(acceleratorPedal),
+			BrakeStatus:      int32(brakeStatus),
+			Longitude:        longitude,
+			Latitude:         latitude,
+			TimeInt:          common.ParseTimeToInt(record[0]),
+		}
+		points = append(points, point)
+	}
+
+	//common.InfoLog("成功读取轨迹点数量: %d\n", len(points))
+	return points
+}
+
 //
 //func ReadTrackFromCSV(path string) (*common.Track, error) {
 //	file, err := os.Open(path)
@@ -168,4 +179,59 @@ func ReadMatchingPointFromCSV(path string) []*proto_struct.MatchingPoint {
 	}
 
 	return mps
+}
+
+func ReadTrackPointFromCSV(path string) []*proto_struct.TrackPoint {
+	file, err := os.Open(path)
+	if err != nil {
+		common.ErrorLog("打开CSV文件失败:", err)
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	if _, err := reader.Read(); err != nil {
+		log.Println("error when reading csv:", err)
+	}
+
+	tps := make([]*proto_struct.TrackPoint, 0)
+
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			common.ErrorLog("读取CSV记录失败:", err)
+		}
+
+		tp := &proto_struct.TrackPoint{
+			Time:    record[0],
+			TimeInt: common.ParseTimeToInt(record[0]),
+		}
+
+		tp.Speed, _ = strconv.ParseFloat(record[1], 64)
+		tp.Longitude, _ = strconv.ParseFloat(record[2], 64)
+		tp.Latitude, _ = strconv.ParseFloat(record[3], 64)
+		var temp int
+		temp, _ = strconv.Atoi(record[4])
+		tp.VehicleStatus = int32(temp)
+		temp, _ = strconv.Atoi(record[5])
+		tp.HaveDriver = int32(temp)
+		temp, _ = strconv.Atoi(record[6])
+		tp.HaveBrake = int32(temp)
+		temp, _ = strconv.Atoi(record[7])
+		tp.AcceleratorPedal = int32(temp)
+		temp, _ = strconv.Atoi(record[8])
+		tp.BrakeStatus = int32(temp)
+		tp.MatchedLon, _ = strconv.ParseFloat(record[9], 64)
+		tp.MatchedLat, _ = strconv.ParseFloat(record[10], 64)
+		temp, _ = strconv.Atoi(record[11])
+		tp.RoadId = int64(temp)
+		temp, _ = strconv.Atoi(record[12])
+		tp.IsBad = int32(temp)
+
+		tps = append(tps, tp)
+	}
+
+	return tps
 }
