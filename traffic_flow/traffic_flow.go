@@ -1,4 +1,4 @@
-package main
+package traffic_flow
 
 import (
 	"EVdata/CSV"
@@ -11,24 +11,12 @@ import (
 )
 
 var (
-	workerCount       int = 500
-	readerChannelSize     = 100
-	writerChannelSize     = 100
+	workerCount int = 500
 )
 
 type mergeData struct {
 	rps []*proto_struct.RawPoint
 	mps []*proto_struct.MatchingPoint
-}
-
-func main() {
-
-	readerCh := make(chan *mergeData, readerChannelSize)
-	writerCh := make(chan []*proto_struct.TrackPoint, writerChannelSize)
-
-	StartReader(readerCh)
-	StartWriter(writerCh)
-	StartWorker(readerCh, writerCh)
 }
 
 func StartReader(rch chan *mergeData) {

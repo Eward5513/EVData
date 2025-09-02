@@ -267,7 +267,7 @@ func StartWriterWorker(writerChan chan *proto_struct.Track) {
 				//}
 				//CSV.Write(fp, proto_struct.MatchingPointHeader, data)
 
-				fp := filepath.Join(common.MATCHED_RAW_POINT_CSV_DIR, fmt.Sprintf("%d_%d.csv", t.Vin, t.Tid))
+				fp := filepath.Join(common.MATCHED_RAW_POINT_CSV_DIR, fmt.Sprintf("%d.csv", t.Vin))
 				data := MergePoints(t.Mps, t.Rps)
 				CSV.Write(fp, proto_struct.TrackPointHeader, data)
 
@@ -333,6 +333,14 @@ func Worker(readerChan chan []*proto_struct.RawPoint, writerChan chan *proto_str
 		//mmap.RecordRawPoints(msg)
 
 		rpss := make([][]*proto_struct.RawPoint, 0)
+
+		matchedPoints := make([]*proto_struct.MatchingPoint, 0, len(msg))
+
+		if len(msg) == 0 {
+			common.ErrorLog("No raw points found")
+		}
+		vin := msg[0].Vin
+
 		var preTime int64 = -100
 		for _, p := range msg {
 			if p.TimeInt-preTime >= 60 {
@@ -414,12 +422,16 @@ func Worker(readerChan chan []*proto_struct.RawPoint, writerChan chan *proto_str
 				continue
 			}
 
-			ans := DeepCopyTrack(res)
-			ans.Rps = rps
 			//common.InfoLog("send to writer", len(ans.Mps), ans.Vin, ans.Tid)
+			copiedPoints := DeepCopyMps(res)
+			matchedPoints = append(matchedPoints, copiedPoints...)
 			mmap.Clear()
-			writerChan <- ans
 		}
+		matchedTrack := common.GetTrack()
+		matchedTrack.Vin = vin
+		matchedTrack.Rps = msg
+		matchedTrack.Mps = matchedPoints
+		writerChan <- matchedTrack
 	}
 }
 
@@ -623,12 +635,8 @@ func CopyTrack(t *proto_struct.Track) *proto_struct.Track {
 	return newTrack
 }
 
-func DeepCopyTrack(t *proto_struct.Track) *proto_struct.Track {
-	newTrack := common.GetTrack()
-	newTrack.Vin = t.Vin
-	newTrack.Tid = t.Tid
-	newTrack.Probability = t.Probability
-	newTrack.Mps = make([]*proto_struct.MatchingPoint, 0, len(t.Mps))
+func DeepCopyMps(t *proto_struct.Track) []*proto_struct.MatchingPoint {
+	copiedMps := make([]*proto_struct.MatchingPoint, 0, len(t.Mps))
 
 	for _, mp := range t.Mps {
 		newMp := common.GetMatchingPoint()
@@ -638,10 +646,10 @@ func DeepCopyTrack(t *proto_struct.Track) *proto_struct.Track {
 		newMp.MatchedLat = mp.MatchedLat
 		newMp.RoadId = mp.RoadId
 		newMp.IsBad = mp.IsBad
-		newTrack.Mps = append(newTrack.Mps, newMp)
+		copiedMps = append(copiedMps, newMp)
 	}
 
-	return newTrack
+	return copiedMps
 }
 
 func OnSameRoad(p1, p2 *common.CandidatePoint) bool {

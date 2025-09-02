@@ -77,6 +77,17 @@ type Road struct {
 	Node *GraphNode
 }
 
+type TrafficFlowSegment struct {
+	RoadId    int
+	StartTime string
+	EndTime   string
+}
+type TrafficFlow struct {
+	Vin          int
+	Tid          int
+	FlowSegments []*TrafficFlowSegment
+}
+
 func Distance(x1, y1, x2, y2 float64) float64 {
 	//if AVX2Supported() {
 	//	return DistanceAVX2(x1, y1, x2, y2)

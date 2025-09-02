@@ -2,6 +2,7 @@ package main
 
 import (
 	"EVdata/common"
+	"EVdata/server"
 	"time"
 )
 
@@ -14,7 +15,7 @@ func main() {
 	//限制时区
 	time.Local = time.UTC
 
-	worker := NewServerWorker()
+	worker := server.NewServerWorker()
 
 	worker.Init()
 

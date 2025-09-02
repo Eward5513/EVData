@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"EVdata/CSV"
@@ -170,7 +170,6 @@ func (sw *ServerWorker) PointHandler(w http.ResponseWriter, r *http.Request) {
 
 type GenerateTrackRequest struct {
 	Vin       string `json:"vin"`
-	Tid       string `json:"tid"`
 	StartTime string `json:"start_time"`
 	EndTime   string `json:"end_time"`
 }
@@ -202,7 +201,7 @@ func (sw *ServerWorker) GenerateTrackHandler(w http.ResponseWriter, r *http.Requ
 	}
 	defer r.Body.Close()
 
-	fp := filepath.Join(common.MATCHED_RAW_POINT_CSV_DIR, request.Vin+"_"+request.Tid+".csv")
+	fp := filepath.Join(common.MATCHED_RAW_POINT_CSV_DIR, request.Vin+".csv")
 	if _, err := os.Stat(fp); err != nil {
 		http.Error(w, "Invalid Vin or Tid", http.StatusBadRequest)
 		return
