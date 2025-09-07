@@ -223,7 +223,7 @@ func PreComputing(graphNodes map[int64]*common.GraphNode) {
 					continue
 				}
 
-				newDis := currentDis + common.MAGIC_NUM*common.Distance(currentNode.Lat, currentNode.Lon, nextNode.Lat, nextNode.Lon)
+				newDis := currentDis + common.Distance(currentNode.Lat, currentNode.Lon, nextNode.Lat, nextNode.Lon)
 				pq.Push(NewHeapItem(nextNode, newDis, currentNode))
 			}
 		}
@@ -238,14 +238,14 @@ func StartReader(rch chan []*proto_struct.RawPoint) {
 	common.InfoLog("Finish reading parquet file")
 
 	var cnt int
-	for i := 1; i < len(vps); i++ {
-		cnt += len(vps[i])
-		if i%1000 == 0 {
-			common.InfoLog("Finish reading ", i, " / ", len(vps))
-		}
-		rch <- vps[i]
-	}
-	//rch <- vps[1]
+	//for i := 1; i < len(vps); i++ {
+	//	cnt += len(vps[i])
+	//	if i%1000 == 0 {
+	//		common.InfoLog("Finish reading ", i, " / ", len(vps))
+	//	}
+	//	rch <- vps[i]
+	//}
+	rch <- vps[1]
 	close(rch)
 	common.InfoLog("Finish reading ", cnt)
 }
@@ -435,9 +435,9 @@ func Worker(readerChan chan []*proto_struct.RawPoint, writerChan chan *proto_str
 	}
 }
 
-func PreProcess(msg []*proto_struct.RawPoint) []*proto_struct.RawPoint {
+func PreProcess(rps []*proto_struct.RawPoint) []*proto_struct.RawPoint {
 	var res []*proto_struct.RawPoint
-	for _, p := range msg {
+	for _, p := range rps {
 		if len(res) == 0 || res[len(res)-1].Longitude != p.Longitude || res[len(res)-1].Latitude != p.Latitude {
 			res = append(res, p)
 		}
@@ -446,11 +446,7 @@ func PreProcess(msg []*proto_struct.RawPoint) []*proto_struct.RawPoint {
 }
 
 func CandidateSearch(p *proto_struct.RawPoint, indexRoot *IndexNode, mmp *common.MemoryMap, tt float64) []*common.CandidatePoint {
-	var minNode, minNode2 *common.GraphNode
-	minDis := math.MaxFloat64
-	mint := math.MaxFloat64
-	var minID int64
-	var minLat, minLon float64
+
 	targetMap := make(map[int64]int64)
 	candidates := make([]*common.CandidatePoint, 0)
 	do := DistanceOffset + tt*DistanceOffset
@@ -471,81 +467,80 @@ func CandidateSearch(p *proto_struct.RawPoint, indexRoot *IndexNode, mmp *common
 			}
 		}
 	}
-	visited := make(map[string]bool)
+	//visited := make(map[string]bool)
 
+	var minNode1, minNode2 *common.GraphNode
+	mint, minDis, minLat, minLon := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
+	var minID int64 = math.MaxInt64
 	for _, in := range ins {
 		for _, gn := range in.graphNodes {
 			for _, way := range gn.Next {
-				//双向路会产生两个candidate，去重
-				if k, exist := targetMap[gn.Id]; exist && k == way.Node.Id {
-					continue
-				}
-				x1, y1, x2, y2, x3, y3 := gn.Lat, gn.Lon, way.Node.Lat, way.Node.Lon, p.Latitude, p.Longitude
-				t := common.CalT(x1, y1, x2, y2, x3, y3)
-				var dis float64
-				if t < 1 && t > 0 {
-					dis = common.P2lDistance(x1, y1, x2, y2, x3, y3) * common.MAGIC_NUM
+				latB, lonB, latC, lonC, latA, lonA := gn.Lat, gn.Lon, way.Node.Lat, way.Node.Lon, p.Latitude, p.Longitude
+				onSeg, t := common.CanProjectOntoSegment(latA, lonA, latB, lonB, latC, lonC)
+				if onSeg {
+					//双向路会产生两个candidate，去重
+					if k, exist := targetMap[gn.Id]; exist && k == way.Node.Id {
+						continue
+					}
+					footLat, footLon, distMeters := common.FootPointAndDistance(latA, lonA, latB, lonB, latC, lonC, t)
 					//if t < 0 {
 					//	t = 0
 					//}
 					//所有允许范围内的值
-					if dis < do {
-						lat, lon := common.CalP(x1, x2, y1, y2, t)
-						key := fmt.Sprintf("%.6f,%.6f", lat, lon)
-						if !visited[key] {
-							cand := mmp.GetCandidatePoint()
-							cand.Vertex = []*common.GraphNode{gn, way.Node}
-							cand.Ttype = common.NORMAL
-							cand.TT = t
-							cand.Distance = dis
-							cand.OriginalPoint = p
-							targetMap[way.Node.Id] = gn.Id
-							//common.DebugLog("dis:", dis)
-							cand.Lat, cand.Lon = lat, lon
-							cand.Ep = common.CalEP(dis)
-							cand.RoadID = way.ID
-							candidates = append(candidates, cand)
-							//if gn.Id == 6697251679 && p.Date == "2022-03-19" && p.Timestamp == "03:49:15" {
-							//	common.InfoLog(gn.Id, way.Node.Id, cand.Lat, cand.Lon)
-							//}
-							visited[key] = true
-						}
+					if distMeters < do {
+						//key := fmt.Sprintf("%.7f,%.7f", footLat, footLon)
+						//if !visited[key] {
+						cand := mmp.GetCandidatePoint()
+						cand.Vertex = []*common.GraphNode{gn, way.Node}
+						cand.Ttype = common.NORMAL
+						cand.TT = t
+						cand.Distance = distMeters
+						cand.OriginalPoint = p
+						targetMap[way.Node.Id] = gn.Id
+						//common.DebugLog("dis:", dis)
+						cand.Lat, cand.Lon = footLat, footLon
+						cand.Ep = common.CalEP(distMeters)
+						cand.RoadID = way.ID
+						candidates = append(candidates, cand)
+
+						//	visited[key] = true
+						//}
 					}
 					//记录最小值
-					if dis < minDis {
+					if distMeters < minDis {
 						mint = t
-						minNode = gn
+						minNode1 = gn
 						minNode2 = way.Node
-						minDis = dis
+						minDis = distMeters
 						minID = way.ID
-						minLat, minLon = common.CalP(x1, x2, y1, y2, t)
+						minLat, minLon = footLat, footLon
 					}
 				} else {
 					//如果不垂直检查端点距离
-					dis = common.Distance(gn.Lat, gn.Lon, p.Latitude, p.Longitude) * common.MAGIC_NUM
+					dis := common.Distance(gn.Lat, gn.Lon, p.Latitude, p.Longitude)
 					if dis < do {
-						key := fmt.Sprintf("%.6f,%.6f", gn.Lat, gn.Lon)
-						if !visited[key] {
-							cand := mmp.GetCandidatePoint()
-							cand.Vertex = []*common.GraphNode{gn, way.Node}
-							cand.Ttype = common.NORMAL
-							cand.TT = t
-							cand.Distance = dis
-							cand.OriginalPoint = p
-							cand.Lat = gn.Lat
-							cand.Lon = gn.Lon
-							targetMap[way.Node.Id] = gn.Id
-							//common.DebugLog("dis:", dis)
-							cand.Ep = common.CalEP(dis)
-							cand.RoadID = way.ID
-							candidates = append(candidates, cand)
-							visited[key] = true
-						}
+						//key := fmt.Sprintf("%.6f,%.6f", gn.Lat, gn.Lon)
+						//if !visited[key] {
+						cand := mmp.GetCandidatePoint()
+						cand.Vertex = []*common.GraphNode{gn, way.Node}
+						cand.Ttype = common.NORMAL
+						cand.TT = t
+						cand.Distance = dis
+						cand.OriginalPoint = p
+						cand.Lat = gn.Lat
+						cand.Lon = gn.Lon
+						targetMap[way.Node.Id] = gn.Id
+						//common.DebugLog("dis:", dis)
+						cand.Ep = common.CalEP(dis)
+						cand.RoadID = way.ID
+						candidates = append(candidates, cand)
+						//	visited[key] = true
+						//}
 					}
 					//记录最小值
 					if dis < minDis {
 						mint = t
-						minNode = gn
+						minNode1 = gn
 						minNode2 = way.Node
 						minDis = dis
 						minID = way.ID
@@ -558,7 +553,7 @@ func CandidateSearch(p *proto_struct.RawPoint, indexRoot *IndexNode, mmp *common
 	}
 	if len(candidates) == 0 {
 		cp := mmp.GetCandidatePoint()
-		cp.Vertex = []*common.GraphNode{minNode, minNode2}
+		cp.Vertex = []*common.GraphNode{minNode1, minNode2}
 		cp.Ttype = common.DISCRETE
 		cp.TT = mint
 		cp.Distance = minDis
@@ -674,7 +669,7 @@ func FindOptimalPath(nextCandis *common.CandidateSet, tracks map[*common.Candida
 			//common.DebugLog("p", p.originalPoint.Latitude, p.originalPoint.Longitude)
 			//common.DebugLog("pp", p.Lat, p.lon, p.roadID)
 			//common.DebugLog(p.originalPoint.Vin, p.originalPoint.Date, p.originalPoint.Timestamp, p.originalPoint.Hour)
-			ddistance := common.Distance(p.OriginalPoint.Latitude, p.OriginalPoint.Longitude, n.OriginalPoint.Latitude, n.OriginalPoint.Longitude) * common.MAGIC_NUM
+			ddistance := common.Distance(p.OriginalPoint.Latitude, p.OriginalPoint.Longitude, n.OriginalPoint.Latitude, n.OriginalPoint.Longitude)
 			ldistance := math.MaxFloat64
 			var sp *common.Path
 
@@ -684,7 +679,7 @@ func FindOptimalPath(nextCandis *common.CandidateSet, tracks map[*common.Candida
 				ldistance = ddistance
 			} else if OnSameRoad(p, n) == true {
 				//common.DebugLog("same road")
-				ldistance = common.Distance(p.Lat, p.Lon, n.Lat, n.Lon) * common.MAGIC_NUM
+				ldistance = common.Distance(p.Lat, p.Lon, n.Lat, n.Lon)
 			} else {
 				var startNode, endNode *common.GraphNode
 				//common.DebugLog("search road1:", p.Vertex[0].Lat, p.Vertex[0].lon)
@@ -694,7 +689,7 @@ func FindOptimalPath(nextCandis *common.CandidateSet, tracks map[*common.Candida
 
 				for i := 0; i < len(p.Vertex); i++ {
 					for j := 0; j < len(n.Vertex); j++ {
-						ld := common.Distance(p.Lat, p.Lon, p.Vertex[i].Lat, p.Vertex[i].Lon)*common.MAGIC_NUM + common.Distance(n.Lat, n.Lon, n.Vertex[j].Lat, n.Vertex[j].Lon)*common.MAGIC_NUM
+						ld := common.Distance(p.Lat, p.Lon, p.Vertex[i].Lat, p.Vertex[i].Lon) + common.Distance(n.Lat, n.Lon, n.Vertex[j].Lat, n.Vertex[j].Lon)
 						//common.DebugLog(p.Lat, p.lon, p.Vertex[i].Lat, p.Vertex[i].lon)
 						//common.DebugLog(n.Lat, n.lon, n.Vertex[j].Lat, n.Vertex[j].lon)
 						//common.DebugLog(p.Vertex[i].id, n.Vertex[j].id)

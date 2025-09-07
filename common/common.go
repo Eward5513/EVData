@@ -18,7 +18,7 @@ const (
 	MATCHED_RAW_POINT_CSV_DIR  = "D:/zhangteng3/matched_raw_points/csv"
 
 	TRACK_RAW_DATA_DIR_PATH     = "D:/zhangteng2/track_raw_data"
-	TRACK_DATA_DIR_PATH         = "D:/zhangteng2/track_data"
+	TRACK_DATA_DIR_PATH         = "D:/zhangteng3/track"
 	PARQUET_COUNT           int = 10017
 	SERVER_WORKER_COUNT         = 5000
 	VEHICLE_COUNT               = 93469

@@ -30,8 +30,8 @@ func (p *MatchingPoint) ToCSV() []string {
 	return []string{
 		//fmt.Sprintf("%.6f", p.OriginalLon),
 		//fmt.Sprintf("%.6f", p.OriginalLat),
-		fmt.Sprintf("%.6f", p.MatchedLon),
-		fmt.Sprintf("%.6f", p.MatchedLat),
+		fmt.Sprintf("%.7f", p.MatchedLon),
+		fmt.Sprintf("%.7f", p.MatchedLat),
 		fmt.Sprint(p.RoadId),
 		fmt.Sprint(p.IsBad),
 	}

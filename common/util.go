@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func FileOrDirExists(path string) bool {
@@ -141,4 +142,32 @@ func ParseTimeToInt(timeStr string) int64 {
 	}
 
 	return int64(hour*60*60 + minute*60 + second)
+}
+
+// TimeStringToUnixMillis 将 "hh:mm:ss" 格式的时间字符串转换为毫秒级 Unix 时间戳
+// 假定日期为2025年9月1号，时区为UTC
+func TimeStringToUnixMillis(timeStr string) int64 {
+	parts := strings.Split(timeStr, ":")
+	if len(parts) != 3 {
+		return 0 // 如果格式不正确，返回0
+	}
+
+	hour, err1 := strconv.Atoi(parts[0])
+	minute, err2 := strconv.Atoi(parts[1])
+	second, err3 := strconv.Atoi(parts[2])
+
+	if err1 != nil || err2 != nil || err3 != nil {
+		return 0 // 如果转换失败，返回0
+	}
+
+	// 验证时间范围
+	if hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59 {
+		return 0 // 时间范围不合法，返回0
+	}
+
+	// 创建2025年9月1号的时间对象（UTC时区）
+	baseDate := time.Date(2025, 9, 1, hour, minute, second, 0, time.UTC)
+	
+	// 返回毫秒级时间戳
+	return baseDate.UnixMilli()
 }

@@ -76,45 +76,39 @@ type Road struct {
 	Way  *Element
 	Node *GraphNode
 }
-
-type TrafficFlowSegment struct {
-	RoadId    int
-	StartTime string
-	EndTime   string
-}
 type TrafficFlow struct {
-	Vin          int
-	Tid          int
-	FlowSegments []*TrafficFlowSegment
+	Vin  int32
+	Node []int64
+	Time []int64
 }
 
-func Distance(x1, y1, x2, y2 float64) float64 {
+func Distance(lat1, lon1, lat2, lon2 float64) float64 {
 	//if AVX2Supported() {
 	//	return DistanceAVX2(x1, y1, x2, y2)
 	//}
-	return math.Hypot(x2-x1, y2-y1)
+	return Haversine(lat1, lon1, lat2, lon2)
 }
 
-func P2lDistance(x1, y1, x2, y2, x3, y3 float64) float64 {
-	//if AVX2Supported() {
-	//	return P2lDistanceAVX2(x1, y1, x2, y2, x3, y3)
-	//}
-	return math.Abs((x2-x1)*(y3-y1)-(y2-y1)*(x3-x1)) / Distance(x1, y1, x2, y2)
-}
+//func P2lDistance(x1, y1, x2, y2, x3, y3 float64) float64 {
+//	//if AVX2Supported() {
+//	//	return P2lDistanceAVX2(x1, y1, x2, y2, x3, y3)
+//	//}
+//	return math.Abs((x2-x1)*(y3-y1)-(y2-y1)*(x3-x1)) / Distance(x1, y1, x2, y2)
+//}
 
-func CalT(x1, y1, x2, y2, x3, y3 float64) float64 {
-	//if AVX2Supported() {
-	//	return CalTAVX2(x1, y1, x2, y2, x3, y3)
-	//}
-	return ((x2-x1)*(x3-x1) + (y2-y1)*(y3-y1)) / ((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1))
-}
+//func CalT(x1, y1, x2, y2, x3, y3 float64) float64 {
+//	//if AVX2Supported() {
+//	//	return CalTAVX2(x1, y1, x2, y2, x3, y3)
+//	//}
+//	return ((x2-x1)*(x3-x1) + (y2-y1)*(y3-y1)) / ((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1))
+//}
 
-func CalP(x1, x2, y1, y2, tt float64) (float64, float64) {
-	//if AVX2Supported() {
-	//	return CalPAVX2(x1, y1, x2, y2, tt)
-	//}
-	return x1 + tt*(x2-x1), y1 + tt*(y2-y1)
-}
+//func CalP(x1, x2, y1, y2, tt float64) (float64, float64) {
+//	//if AVX2Supported() {
+//	//	return CalPAVX2(x1, y1, x2, y2, tt)
+//	//}
+//	return x1 + tt*(x2-x1), y1 + tt*(y2-y1)
+//}
 
 func CalEP(dis float64) float64 {
 	//if AVX2Supported() {
@@ -130,4 +124,84 @@ func Abs[T ~int64 | int](a, b T) T {
 		return b - a
 	}
 	return a - b
+}
+
+const EarthRadius = 6371008.8 // meters, WGS84 mean Earth radius
+
+// Haversine distance (meters). Inputs are degrees.
+func Haversine(lat1, lon1, lat2, lon2 float64) float64 {
+	phi1 := lat1 * math.Pi / 180.0
+	phi2 := lat2 * math.Pi / 180.0
+	dphi := (lat2 - lat1) * math.Pi / 180.0
+	dlam := (lon2 - lon1) * math.Pi / 180.0
+
+	sdphi := math.Sin(dphi / 2)
+	sdlam := math.Sin(dlam / 2)
+
+	a := sdphi*sdphi + math.Cos(phi1)*math.Cos(phi2)*sdlam*sdlam
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+	return EarthRadius * c
+}
+
+// metersPerDegree returns meters per 1 degree of latitude and longitude at a given latitude (radians).
+func metersPerDegree(latRad float64) (mLat, mLon float64) {
+	mLat = 111132.92 - 559.82*math.Cos(2*latRad) + 1.175*math.Cos(4*latRad) - 0.0023*math.Cos(6*latRad)
+	mLon = 111412.84*math.Cos(latRad) - 93.5*math.Cos(3*latRad) + 0.118*math.Cos(5*latRad)
+	return
+}
+
+// CanProjectOntoSegment computes the projection parameter t of A onto line BC
+// using a local meters-per-degree planar mapping. It returns whether the
+// perpendicular foot lies on the segment (t in [0,1] within eps), and the raw t.
+// If B and C are identical, onSeg=false and t=0.
+func CanProjectOntoSegment(
+	latA, lonA, latB, lonB, latC, lonC float64,
+) (onSeg bool, t float64) {
+	const eps = 1e-9
+
+	// reference latitude for scale
+	phi0 := ((latB + latC) / 2.0) * math.Pi / 180.0
+	mLat, mLon := metersPerDegree(phi0)
+
+	// local planar coords (meters), using B as origin
+	Bx, By := 0.0, 0.0
+	Cx := (lonC - lonB) * mLon
+	Cy := (latC - latB) * mLat
+	Ax := (lonA - lonB) * mLon
+	Ay := (latA - latB) * mLat
+
+	vx, vy := Cx-Bx, Cy-By
+	wx, wy := Ax-Bx, Ay-By
+
+	vv := vx*vx + vy*vy
+	if vv < eps {
+		return false, 0.0 // degenerate segment
+	}
+
+	t = (wx*vx + wy*vy) / vv
+	onSeg = (t >= -eps && t <= 1.0+eps)
+	return
+}
+
+// FootPointAndDistance returns the clamped foot point on segment BC (lat/lon in degrees)
+// and the great-circle distance (meters) from A to that foot.
+// It accepts a t (e.g., from CanProjectOntoSegment) and clamps it into [0,1].
+func FootPointAndDistance(
+	latA, lonA, latB, lonB, latC, lonC float64, t float64,
+) (footLat, footLon, distMeters float64) {
+	// clamp t to the segment
+	if t < 0 {
+		t = 0
+	}
+	if t > 1 {
+		t = 1
+	}
+
+	// interpolate directly in degrees (equivalent to back-transform from local meters)
+	footLat = latB + t*(latC-latB)
+	footLon = lonB + t*(lonC-lonB)
+
+	// distance A -> foot
+	distMeters = Haversine(latA, lonA, footLat, footLon)
+	return
 }

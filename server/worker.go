@@ -3,14 +3,16 @@ package server
 import (
 	"EVdata/CSV"
 	"EVdata/common"
+	"EVdata/mapmatching"
 	"EVdata/proto_struct"
+	"bufio"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -41,6 +43,7 @@ type ServerWorker struct {
 	ReceiveCh chan []*proto_struct.RawPoint
 	wg        *sync.WaitGroup
 	data      [][]*proto_struct.RawPoint
+	graph     map[int64]*common.GraphNode
 }
 
 func NewServerWorker() *ServerWorker {
@@ -57,6 +60,9 @@ func NewServerWorker() *ServerWorker {
 
 func (sw *ServerWorker) Init() {
 	//sw.data = pgpg.ReadPointFromParquet(common.RAW_POINT_PARQUET_PATH)
+
+	// 建图操作
+	sw.graph = mapmatching.BuildGraph("shanghai_new.json")
 
 	for i := 0; i < common.SERVER_WORKER_COUNT; i++ {
 		go sw.work(sw.OrderCh[i], i)
@@ -208,16 +214,15 @@ func (sw *ServerWorker) GenerateTrackHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	// 读取轨迹数据
-	mps := CSV.ReadTrackPointFromCSV(fp)
+	vinInt, _ := strconv.Atoi(request.Vin)
+	mps := CSV.ReadTrackPointFromCSV(vinInt)
 
 	startTimeInt := common.ParseTimeToInt(request.StartTime)
 	endTimeInt := common.ParseTimeToInt(request.EndTime)
 
 	res := make([]*proto_struct.TrackPoint, 0, len(mps))
-	vinInt, _ := strconv.Atoi(request.Vin)
 	for _, mp := range mps {
 		if mp.TimeInt >= startTimeInt && mp.TimeInt <= endTimeInt {
-			mp.Vin = int32(vinInt)
 			res = append(res, mp)
 		}
 	}
@@ -247,6 +252,18 @@ type TrackResponse struct {
 	Data []*proto_struct.Track `json:"tracks"`
 }
 
+// 新的轨迹点响应结构
+type TrackPointResponse struct {
+	Data []TrackPointData `json:"points"`
+}
+
+type TrackPointData struct {
+	Vin       int     `json:"vin"`
+	Longitude float64 `json:"longitude"`
+	Latitude  float64 `json:"latitude"`
+	Timestamp string  `json:"timestamp"`
+}
+
 func (sw *ServerWorker) TrackHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("TrackHandler")
@@ -270,18 +287,86 @@ func (sw *ServerWorker) TrackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	// 读取轨迹数据
-	mps := CSV.ReadMatchingPointFromCSV(filepath.Join(common.MATCHED_POINT_CSV_DIR, fmt.Sprintf("%d_%d.csv", request.Vin, request.Tid)))
+	// 读取三个文件的数据
+	queryData, err := sw.readQueryFile()
+	if err != nil {
+		http.Error(w, "Failed to read query.txt: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-	t := &proto_struct.Track{
-		Vin: int32(request.Vin),
-		Tid: int32(request.Tid),
-		Mps: mps,
+	routeData, err := sw.readRouteFile()
+	if err != nil {
+		http.Error(w, "Failed to read route.txt: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	timeData, err := sw.readTimeFile()
+	if err != nil {
+		http.Error(w, "Failed to read time.txt: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// 直接使用tid作为行索引
+	common.InfoLog(len(queryData), len(routeData), len(timeData))
+	if request.Tid >= len(queryData) || request.Tid >= len(routeData) || request.Tid >= len(timeData) {
+		http.Error(w, "Invalid tid: index out of range", http.StatusBadRequest)
+		return
+	}
+
+	targetQuery := strings.Fields(queryData[request.Tid])
+	targetRoute := strings.Fields(routeData[request.Tid])
+	targetTime := strings.Fields(timeData[request.Tid])
+
+	// 解析数据并构建响应点列表
+	var points []TrackPointData
+
+	if len(targetRoute) >= 2 && len(targetTime) >= 2 {
+		// 解析route数据: vin 节点数量 node1 bool1 bool2 bool3 bool4 node2 ...
+		nodeCount, _ := strconv.Atoi(targetRoute[1])
+
+		// 提取节点ID和时间戳
+		nodeIndex := 2
+		timeIndex := 2
+
+		for i := 0; i < nodeCount && nodeIndex < len(targetRoute); i++ {
+			nodeId, err := strconv.ParseInt(targetRoute[nodeIndex], 10, 64)
+			if err != nil {
+				nodeIndex += 5 // 跳过当前节点和4个bool值
+				continue
+			}
+
+			// 从图中获取经纬度
+			if node, exists := sw.graph[nodeId]; exists {
+				var timestampMillis int64
+				if i == 0 {
+					// 第一个点使用query中的开始时间
+					if len(targetQuery) >= 4 {
+						timestampMillis, _ = strconv.ParseInt(targetQuery[3], 10, 64)
+					}
+				} else if timeIndex < len(targetTime) {
+					// 其他点使用time文件中的时间
+					timestampMillis, _ = strconv.ParseInt(targetTime[timeIndex], 10, 64)
+					timeIndex++
+				}
+
+				// 将毫秒级时间戳转换为 hh:mm:ss 格式
+				timestamp := time.UnixMilli(timestampMillis).Format("15:04:05")
+
+				points = append(points, TrackPointData{
+					Vin:       request.Vin,
+					Longitude: node.Lon,
+					Latitude:  node.Lat,
+					Timestamp: timestamp,
+				})
+			}
+
+			nodeIndex += 5 // 移动到下一个节点（跳过4个bool值）
+		}
 	}
 
 	// 构建响应
-	response := TrackResponse{
-		Data: []*proto_struct.Track{t},
+	response := TrackPointResponse{
+		Data: points,
 	}
 
 	// 返回响应
@@ -351,4 +436,52 @@ func (sw *ServerWorker) work(ch chan *channelRequest, cnt int) {
 		//...
 		sw.ReceiveCh <- targetPoints
 	}
+}
+
+// 读取query.txt文件
+func (sw *ServerWorker) readQueryFile() ([]string, error) {
+	file, err := os.Open(filepath.Join(common.TRACK_DATA_DIR_PATH, "query.txt"))
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	return lines, scanner.Err()
+}
+
+// 读取route.txt文件
+func (sw *ServerWorker) readRouteFile() ([]string, error) {
+	file, err := os.Open(filepath.Join(common.TRACK_DATA_DIR_PATH, "route.txt"))
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	return lines, scanner.Err()
+}
+
+// 读取time.txt文件
+func (sw *ServerWorker) readTimeFile() ([]string, error) {
+	file, err := os.Open(filepath.Join(common.TRACK_DATA_DIR_PATH, "time.txt"))
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	return lines, scanner.Err()
 }

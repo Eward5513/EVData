@@ -4,6 +4,7 @@ import (
 	"EVdata/common"
 	"EVdata/proto_struct"
 	"EVdata/traffic_flow"
+	"time"
 )
 
 var (
@@ -12,10 +13,15 @@ var (
 )
 
 func main() {
-	readerCh := make(chan *proto_struct.TrackPoint, readerChannelSize)
+	begin := time.Now()
+
+	readerCh := make(chan []*proto_struct.TrackPoint, readerChannelSize)
 	writerCh := make(chan []*common.TrafficFlow, writerChannelSize)
 
-	traffic_flow.StartReader(readerCh)
+	go traffic_flow.StartReader(readerCh)
+	go traffic_flow.StartWorker(readerCh, writerCh)
+
 	traffic_flow.StartWriter(writerCh)
-	traffic_flow.StartWorker(readerCh, writerCh)
+
+	common.InfoLog("Total Execution time: ", time.Now().Sub(begin))
 }

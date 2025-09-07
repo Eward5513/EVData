@@ -4,9 +4,11 @@ import (
 	"EVdata/common"
 	"EVdata/proto_struct"
 	"encoding/csv"
+	"fmt"
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 )
 
@@ -181,7 +183,9 @@ func ReadMatchingPointFromCSV(path string) []*proto_struct.MatchingPoint {
 	return mps
 }
 
-func ReadTrackPointFromCSV(path string) []*proto_struct.TrackPoint {
+func ReadTrackPointFromCSV(vin int) []*proto_struct.TrackPoint {
+	path := filepath.Join(common.MATCHED_RAW_POINT_CSV_DIR, fmt.Sprint(vin)+".csv")
+
 	file, err := os.Open(path)
 	if err != nil {
 		common.ErrorLog("打开CSV文件失败:", err)
@@ -205,6 +209,7 @@ func ReadTrackPointFromCSV(path string) []*proto_struct.TrackPoint {
 		}
 
 		tp := &proto_struct.TrackPoint{
+			Vin:     int32(vin),
 			Time:    record[0],
 			TimeInt: common.ParseTimeToInt(record[0]),
 		}
