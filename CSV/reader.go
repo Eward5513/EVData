@@ -233,6 +233,8 @@ func ReadTrackPointFromCSV(vin int) []*proto_struct.TrackPoint {
 		temp, _ = strconv.Atoi(record[11])
 		tp.RoadId = int64(temp)
 		temp, _ = strconv.Atoi(record[12])
+		tp.NodeId = int64(temp)
+		temp, _ = strconv.Atoi(record[13])
 		tp.IsBad = int32(temp)
 
 		tps = append(tps, tp)

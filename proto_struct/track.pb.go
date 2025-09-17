@@ -153,7 +153,8 @@ type MatchingPoint struct {
 	MatchedLon    float64                `protobuf:"fixed64,3,opt,name=matched_lon,json=matchedLon,proto3" json:"matched_lon,omitempty"`
 	MatchedLat    float64                `protobuf:"fixed64,4,opt,name=matched_lat,json=matchedLat,proto3" json:"matched_lat,omitempty"`
 	RoadId        int64                  `protobuf:"varint,5,opt,name=road_id,json=roadId,proto3" json:"road_id,omitempty"`
-	IsBad         int32                  `protobuf:"varint,6,opt,name=isBad,proto3" json:"isBad,omitempty"`
+	NodeId        int64                  `protobuf:"varint,6,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	IsBad         int32                  `protobuf:"varint,7,opt,name=isBad,proto3" json:"isBad,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -219,6 +220,13 @@ func (x *MatchingPoint) GetMatchedLat() float64 {
 func (x *MatchingPoint) GetRoadId() int64 {
 	if x != nil {
 		return x.RoadId
+	}
+	return 0
+}
+
+func (x *MatchingPoint) GetNodeId() int64 {
+	if x != nil {
+		return x.NodeId
 	}
 	return 0
 }
@@ -323,6 +331,7 @@ type TrackPoint struct {
 	MatchedLon       float64                `protobuf:"fixed64,12,opt,name=matched_lon,json=matchedLon,proto3" json:"matched_lon"`
 	MatchedLat       float64                `protobuf:"fixed64,13,opt,name=matched_lat,json=matchedLat,proto3" json:"matched_lat"`
 	RoadId           int64                  `protobuf:"varint,14,opt,name=road_id,json=roadId,proto3" json:"road_id"`
+	NodeId           int64                  `protobuf:"varint,15,opt,name=node_id,json=nodeId,proto3" json:"node_id"`
 	IsBad            int32                  `protobuf:"varint,15,opt,name=isBad,proto3" json:"isBad"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
@@ -456,6 +465,13 @@ func (x *TrackPoint) GetRoadId() int64 {
 	return 0
 }
 
+func (x *TrackPoint) GetNodeId() int64 {
+	if x != nil {
+		return x.NodeId
+	}
+	return 0
+}
+
 func (x *TrackPoint) GetIsBad() int32 {
 	if x != nil {
 		return x.IsBad
@@ -482,7 +498,7 @@ const file_track_proto_rawDesc = "" +
 	"\x11accelerator_pedal\x18\t \x01(\x05R\x10acceleratorPedal\x12!\n" +
 	"\fbrake_status\x18\n" +
 	" \x01(\x05R\vbrakeStatus\x12\x19\n" +
-	"\btime_int\x18\v \x01(\x03R\atimeInt\"\xc6\x01\n" +
+	"\btime_int\x18\v \x01(\x03R\atimeInt\"\xdf\x01\n" +
 	"\rMatchingPoint\x12!\n" +
 	"\foriginal_lon\x18\x01 \x01(\x01R\voriginalLon\x12!\n" +
 	"\foriginal_lat\x18\x02 \x01(\x01R\voriginalLat\x12\x1f\n" +
@@ -490,14 +506,15 @@ const file_track_proto_rawDesc = "" +
 	"matchedLon\x12\x1f\n" +
 	"\vmatched_lat\x18\x04 \x01(\x01R\n" +
 	"matchedLat\x12\x17\n" +
-	"\aroad_id\x18\x05 \x01(\x03R\x06roadId\x12\x14\n" +
-	"\x05isBad\x18\x06 \x01(\x05R\x05isBad\"\x98\x01\n" +
+	"\aroad_id\x18\x05 \x01(\x03R\x06roadId\x12\x17\n" +
+	"\anode_id\x18\x06 \x01(\x03R\x06nodeId\x12\x14\n" +
+	"\x05isBad\x18\a \x01(\x05R\x05isBad\"\x98\x01\n" +
 	"\x05Track\x12\x10\n" +
 	"\x03vin\x18\x01 \x01(\x05R\x03vin\x12\x10\n" +
 	"\x03tid\x18\x02 \x01(\x05R\x03tid\x12&\n" +
 	"\x03mps\x18\x03 \x03(\v2\x14.track.MatchingPointR\x03mps\x12!\n" +
 	"\x03rps\x18\x04 \x03(\v2\x0f.track.RawPointR\x03rps\x12 \n" +
-	"\vprobability\x18\x05 \x01(\x01R\vprobability\"\xc5\x03\n" +
+	"\vprobability\x18\x05 \x01(\x01R\vprobability\"\xde\x03\n" +
 	"\n" +
 	"TrackPoint\x12\x10\n" +
 	"\x03vin\x18\x01 \x01(\x05R\x03vin\x12\x12\n" +
@@ -518,8 +535,9 @@ const file_track_proto_rawDesc = "" +
 	"matchedLon\x12\x1f\n" +
 	"\vmatched_lat\x18\r \x01(\x01R\n" +
 	"matchedLat\x12\x17\n" +
-	"\aroad_id\x18\x0e \x01(\x03R\x06roadId\x12\x14\n" +
-	"\x05isBad\x18\x0f \x01(\x05R\x05isBadB\x10Z\x0e.;proto_structb\x06proto3"
+	"\aroad_id\x18\x0e \x01(\x03R\x06roadId\x12\x17\n" +
+	"\anode_id\x18\x0f \x01(\x03R\x06nodeId\x12\x14\n" +
+	"\x05isBad\x18\x10 \x01(\x05R\x05isBadB\x10Z\x0e.;proto_structb\x06proto3"
 
 var (
 	file_track_proto_rawDescOnce sync.Once

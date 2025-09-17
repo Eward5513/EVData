@@ -349,8 +349,8 @@ func (sw *ServerWorker) TrackHandler(w http.ResponseWriter, r *http.Request) {
 					timeIndex++
 				}
 
-				// 将毫秒级时间戳转换为 hh:mm:ss 格式
-				timestamp := time.UnixMilli(timestampMillis).Format("15:04:05")
+				// 将毫秒级时间戳转换为 hh:mm:ss 格式（使用 UTC）
+				timestamp := time.UnixMilli(timestampMillis).UTC().Format("15:04:05")
 
 				points = append(points, TrackPointData{
 					Vin:       request.Vin,

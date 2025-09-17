@@ -19,9 +19,6 @@ var (
 func StartReader(rch chan []*proto_struct.TrackPoint) {
 
 	for i := 1; i <= common.VEHICLE_COUNT; i++ {
-		if i > 1 {
-			break
-		}
 		mps := CSV.ReadTrackPointFromCSV(i)
 		rch <- mps
 		if i%1000 == 0 {
@@ -96,34 +93,27 @@ func StartWorker(rch chan []*proto_struct.TrackPoint, wch chan []*common.Traffic
 	graph := mapmatching.BuildGraph("shanghai_new.json")
 	mapmatching.PreComputing(graph)
 
-	g := make(map[string]*common.GraphNode)
-	for _, gn := range graph {
-		k := fmt.Sprintf("%.7f_%.7f", gn.Lon, gn.Lat)
-		g[k] = gn
-	}
-
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
-		go Worker(rch, wch, wg, g)
+		go Worker(rch, wch, wg)
 	}
 
 	wg.Wait()
 	close(wch)
 }
 
-func Worker(rch chan []*proto_struct.TrackPoint, wch chan []*common.TrafficFlow, wg *sync.WaitGroup, graphString map[string]*common.GraphNode) {
+func Worker(rch chan []*proto_struct.TrackPoint, wch chan []*common.TrafficFlow, wg *sync.WaitGroup) {
 
 	defer wg.Done()
 
 	for data := range rch {
 		stps := SplitTrackPoint(data)
-		common.InfoLog("split track point", len(stps))
+		//common.InfoLog("split track point", len(stps))
 
 		var res []*common.TrafficFlow
-		for i, stp := range stps {
-			common.InfoLog("split", i, len(stp), stp[0].Time, stp[len(stp)-1].Time)
+		for _, stp := range stps {
+			//common.InfoLog("split", i, len(stp), stp[0].Time, stp[len(stp)-1].Time)
 			tf := &common.TrafficFlow{}
-			var preID int64 = -1
 			for _, p := range stp {
 				// start time
 				if tf.Node == nil {
@@ -131,10 +121,9 @@ func Worker(rch chan []*proto_struct.TrackPoint, wch chan []*common.TrafficFlow,
 					tf.Vin = p.Vin
 				}
 
-				nk := fmt.Sprintf("%.7f_%.7f", p.MatchedLon, p.MatchedLat)
-				if gn, exist := graphString[nk]; exist && gn.Id != preID {
-					common.InfoLog("add graph node", gn.Id)
-					tf.Node = append(tf.Node, gn.Id)
+				if p.NodeId != 0 {
+					//common.InfoLog("add graph node", p.NodeId)
+					tf.Node = append(tf.Node, p.NodeId)
 					tf.Time = append(tf.Time, common.TimeStringToUnixMillis(p.Time))
 				}
 			}

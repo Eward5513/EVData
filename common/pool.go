@@ -167,6 +167,7 @@ func GetMatchingPoint() *proto_struct.MatchingPoint {
 	p.OriginalLon = 0
 	p.MatchedLon = 0
 	p.MatchedLat = 0
+	p.NodeId = 0
 	return p
 }
 
@@ -176,5 +177,6 @@ func PutMatchingPoint(p *proto_struct.MatchingPoint) {
 	p.OriginalLon = 0
 	p.MatchedLon = 0
 	p.MatchedLat = 0
+	p.NodeId = 0
 	matchingPointPool.Put(p)
 }

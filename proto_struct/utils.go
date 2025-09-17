@@ -18,11 +18,12 @@ func (p *RawPoint) ToCSV() []string {
 }
 
 var MatchingPointHeader = []string{
-	"longitude",
-	"latitude",
+	//"longitude",
+	//"latitude",
 	"matched_lon",
 	"matched_lat",
 	"road_id",
+	"node_id",
 	"is_bad",
 }
 
@@ -33,6 +34,7 @@ func (p *MatchingPoint) ToCSV() []string {
 		fmt.Sprintf("%.7f", p.MatchedLon),
 		fmt.Sprintf("%.7f", p.MatchedLat),
 		fmt.Sprint(p.RoadId),
+		fmt.Sprint(p.NodeId),
 		fmt.Sprint(p.IsBad),
 	}
 }
@@ -50,6 +52,7 @@ var TrackPointHeader = []string{
 	"matched_lon",
 	"matched_lat",
 	"road_id",
+	"node_id",
 	"is_bad",
 }
 

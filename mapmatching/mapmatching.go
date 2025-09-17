@@ -238,14 +238,14 @@ func StartReader(rch chan []*proto_struct.RawPoint) {
 	common.InfoLog("Finish reading parquet file")
 
 	var cnt int
-	//for i := 1; i < len(vps); i++ {
-	//	cnt += len(vps[i])
-	//	if i%1000 == 0 {
-	//		common.InfoLog("Finish reading ", i, " / ", len(vps))
-	//	}
-	//	rch <- vps[i]
-	//}
-	rch <- vps[1]
+	for i := 1; i < len(vps); i++ {
+		cnt += len(vps[i])
+		if i%1000 == 0 {
+			common.InfoLog("Finish reading ", i, " / ", len(vps))
+		}
+		rch <- vps[i]
+	}
+	//rch <- vps[1]
 	close(rch)
 	common.InfoLog("Finish reading ", cnt)
 }
@@ -289,14 +289,13 @@ func MergePoints(mps []*proto_struct.MatchingPoint, rps []*proto_struct.RawPoint
 		if rps[i].Latitude == mps[j].OriginalLat && rps[i].Longitude == mps[j].OriginalLon {
 			// matched
 			i++
-		} else if j < len(mps)-1 && rps[i].Latitude == mps[j+1].OriginalLat && rps[i].Longitude == mps[j+1].OriginalLon {
-			// move to the next matching point
-			j++
-			i++
-			y = j
-		} else {
+		} else if mps[j].OriginalLat < 0 {
 			// added matching points
+			x = i - 1
 			j++
+		} else {
+			j++
+			continue
 		}
 		row := make([]string, 0, len(proto_struct.TrackPointHeader))
 		row = append(row, rps[x].ToCSV()...)
@@ -472,82 +471,94 @@ func CandidateSearch(p *proto_struct.RawPoint, indexRoot *IndexNode, mmp *common
 	var minNode1, minNode2 *common.GraphNode
 	mint, minDis, minLat, minLon := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
 	var minID int64 = math.MaxInt64
+	// 两段搜索
+	excludedEndpoints := make(map[int64]bool) // 被第一段垂直投影命中的线段的两个端点
+	addedEndpoints := make(map[int64]bool)    // 第二段已经加入的端点去重
+
+	// 第一段：仅垂直投影在范围内的作为候选点，并记录其线段端点为排除端点
 	for _, in := range ins {
 		for _, gn := range in.graphNodes {
 			for _, way := range gn.Next {
 				latB, lonB, latC, lonC, latA, lonA := gn.Lat, gn.Lon, way.Node.Lat, way.Node.Lon, p.Latitude, p.Longitude
 				onSeg, t := common.CanProjectOntoSegment(latA, lonA, latB, lonB, latC, lonC)
-				if onSeg {
-					//双向路会产生两个candidate，去重
-					if k, exist := targetMap[gn.Id]; exist && k == way.Node.Id {
-						continue
-					}
-					footLat, footLon, distMeters := common.FootPointAndDistance(latA, lonA, latB, lonB, latC, lonC, t)
-					//if t < 0 {
-					//	t = 0
-					//}
-					//所有允许范围内的值
-					if distMeters < do {
-						//key := fmt.Sprintf("%.7f,%.7f", footLat, footLon)
-						//if !visited[key] {
-						cand := mmp.GetCandidatePoint()
-						cand.Vertex = []*common.GraphNode{gn, way.Node}
-						cand.Ttype = common.NORMAL
-						cand.TT = t
-						cand.Distance = distMeters
-						cand.OriginalPoint = p
-						targetMap[way.Node.Id] = gn.Id
-						//common.DebugLog("dis:", dis)
-						cand.Lat, cand.Lon = footLat, footLon
-						cand.Ep = common.CalEP(distMeters)
-						cand.RoadID = way.ID
-						candidates = append(candidates, cand)
-
-						//	visited[key] = true
-						//}
-					}
-					//记录最小值
-					if distMeters < minDis {
-						mint = t
-						minNode1 = gn
-						minNode2 = way.Node
-						minDis = distMeters
-						minID = way.ID
-						minLat, minLon = footLat, footLon
-					}
-				} else {
-					//如果不垂直检查端点距离
-					dis := common.Distance(gn.Lat, gn.Lon, p.Latitude, p.Longitude)
-					if dis < do {
-						//key := fmt.Sprintf("%.6f,%.6f", gn.Lat, gn.Lon)
-						//if !visited[key] {
-						cand := mmp.GetCandidatePoint()
-						cand.Vertex = []*common.GraphNode{gn, way.Node}
-						cand.Ttype = common.NORMAL
-						cand.TT = t
-						cand.Distance = dis
-						cand.OriginalPoint = p
-						cand.Lat = gn.Lat
-						cand.Lon = gn.Lon
-						targetMap[way.Node.Id] = gn.Id
-						//common.DebugLog("dis:", dis)
-						cand.Ep = common.CalEP(dis)
-						cand.RoadID = way.ID
-						candidates = append(candidates, cand)
-						//	visited[key] = true
-						//}
-					}
-					//记录最小值
-					if dis < minDis {
-						mint = t
-						minNode1 = gn
-						minNode2 = way.Node
-						minDis = dis
-						minID = way.ID
-						minLat = gn.Lat
-						minLon = gn.Lon
-					}
+				if !onSeg {
+					continue
 				}
+				footLat, footLon, distMeters := common.FootPointAndDistance(latA, lonA, latB, lonB, latC, lonC, t)
+
+				// 记录全局最近点（用于离散点回退）
+				if distMeters < minDis {
+					mint = t
+					minNode1 = gn
+					minNode2 = way.Node
+					minDis = distMeters
+					minID = way.ID
+					minLat, minLon = footLat, footLon
+				}
+
+				// 仅在范围内加入候选点
+				if distMeters >= do {
+					continue
+				}
+				// 双向路去重
+				if k, exist := targetMap[gn.Id]; exist && k == way.Node.Id {
+					continue
+				}
+
+				cand := mmp.GetCandidatePoint()
+				cand.Vertex = []*common.GraphNode{gn, way.Node}
+				cand.Ttype = common.NORMAL
+				cand.TT = t
+				cand.Distance = distMeters
+				cand.OriginalPoint = p
+				targetMap[way.Node.Id] = gn.Id
+				cand.Lat, cand.Lon = footLat, footLon
+				cand.Ep = common.CalEP(distMeters)
+				cand.RoadID = way.ID
+				candidates = append(candidates, cand)
+
+				// 排除该线段的两个端点，防止第二段再次作为端点候选
+				excludedEndpoints[gn.Id] = true
+				excludedEndpoints[way.Node.Id] = true
+			}
+		}
+	}
+
+	// 第二段：仅检查端点，排除第一段命中的线段端点
+	for _, in := range ins {
+		for _, gn := range in.graphNodes {
+			for _, way := range gn.Next {
+				// 端点到GPS点的距离
+				dis := common.Distance(gn.Lat, gn.Lon, p.Latitude, p.Longitude)
+
+				// 更新最近点（用于离散点回退）
+				if dis < minDis {
+					mint = 0
+					minNode1 = gn
+					minNode2 = way.Node
+					minDis = dis
+					minID = way.ID
+					minLat = gn.Lat
+					minLon = gn.Lon
+				}
+
+				// 不在合理范围、或被第一段排除的端点、或已加入过的端点，直接跳过
+				if dis >= do || excludedEndpoints[gn.Id] || addedEndpoints[gn.Id] {
+					continue
+				}
+
+				cand := mmp.GetCandidatePoint()
+				cand.Vertex = []*common.GraphNode{gn, way.Node}
+				cand.Ttype = common.NORMAL
+				cand.TT = 0
+				cand.Distance = dis
+				cand.OriginalPoint = p
+				cand.Lat = gn.Lat
+				cand.Lon = gn.Lon
+				cand.Ep = common.CalEP(dis)
+				cand.RoadID = way.ID
+				candidates = append(candidates, cand)
+				addedEndpoints[gn.Id] = true
 			}
 		}
 	}
@@ -597,6 +608,8 @@ func AppendTrack(t *proto_struct.Track, p *common.CandidatePoint, pa *common.Pat
 			mp.MatchedLon = gp.Lon
 			mp.MatchedLat = gp.Lat
 			mp.RoadId = -1
+			mp.NodeId = gp.Id
+			mp.IsBad = -1
 			t.Mps = append(t.Mps, mp)
 		}
 	}
@@ -640,6 +653,7 @@ func DeepCopyMps(t *proto_struct.Track) []*proto_struct.MatchingPoint {
 		newMp.MatchedLon = mp.MatchedLon
 		newMp.MatchedLat = mp.MatchedLat
 		newMp.RoadId = mp.RoadId
+		newMp.NodeId = mp.NodeId
 		newMp.IsBad = mp.IsBad
 		copiedMps = append(copiedMps, newMp)
 	}
@@ -660,15 +674,10 @@ func OnSameRoad(p1, p2 *common.CandidatePoint) bool {
 func FindOptimalPath(nextCandis *common.CandidateSet, tracks map[*common.CandidatePoint]*proto_struct.Track, mmap *common.MemoryMap) map[*common.CandidatePoint]*proto_struct.Track {
 	res := make(map[*common.CandidatePoint]*proto_struct.Track)
 	for _, n := range nextCandis.Cp {
-		//common.DebugLog("search for", n.originalPoint.Latitude, n.originalPoint.Longitude)
-		//common.DebugLog("candis", n.Lat, n.lon, n.Distance, n.roadID)
 		var maxScore float64 = -1
 		var maxTrack *proto_struct.Track
 		var maxPath *common.Path
 		for p, t := range tracks {
-			//common.DebugLog("p", p.originalPoint.Latitude, p.originalPoint.Longitude)
-			//common.DebugLog("pp", p.Lat, p.lon, p.roadID)
-			//common.DebugLog(p.originalPoint.Vin, p.originalPoint.Date, p.originalPoint.Timestamp, p.originalPoint.Hour)
 			ddistance := common.Distance(p.OriginalPoint.Latitude, p.OriginalPoint.Longitude, n.OriginalPoint.Latitude, n.OriginalPoint.Longitude)
 			ldistance := math.MaxFloat64
 			var sp *common.Path
@@ -678,22 +687,13 @@ func FindOptimalPath(nextCandis *common.CandidateSet, tracks map[*common.Candida
 			if p.Ttype == common.DISCRETE || n.Ttype == common.DISCRETE {
 				ldistance = ddistance
 			} else if OnSameRoad(p, n) == true {
-				//common.DebugLog("same road")
 				ldistance = common.Distance(p.Lat, p.Lon, n.Lat, n.Lon)
 			} else {
 				var startNode, endNode *common.GraphNode
-				//common.DebugLog("search road1:", p.Vertex[0].Lat, p.Vertex[0].lon)
-				//common.DebugLog("search road2:", p.Vertex[1].Lat, p.Vertex[1].lon)
-				//common.DebugLog("search road3:", n.Vertex[0].Lat, n.Vertex[0].lon)
-				//common.DebugLog("search road4:", n.Vertex[1].Lat, n.Vertex[1].lon)
 
 				for i := 0; i < len(p.Vertex); i++ {
 					for j := 0; j < len(n.Vertex); j++ {
 						ld := common.Distance(p.Lat, p.Lon, p.Vertex[i].Lat, p.Vertex[i].Lon) + common.Distance(n.Lat, n.Lon, n.Vertex[j].Lat, n.Vertex[j].Lon)
-						//common.DebugLog(p.Lat, p.lon, p.Vertex[i].Lat, p.Vertex[i].lon)
-						//common.DebugLog(n.Lat, n.lon, n.Vertex[j].Lat, n.Vertex[j].lon)
-						//common.DebugLog(p.Vertex[i].id, n.Vertex[j].id)
-						//common.DebugLog("ld:", ld)
 						if pa, exist := p.Vertex[i].ShortestPath[n.Vertex[j]]; exist {
 							ld += pa.Distance
 							if ldistance > ld {
@@ -704,7 +704,6 @@ func FindOptimalPath(nextCandis *common.CandidateSet, tracks map[*common.Candida
 							}
 						} else {
 							//不存在说明距离过远
-							//ddistance = math.MaxFloat64
 							common.DebugLog("not exist")
 						}
 					}
@@ -718,9 +717,6 @@ func FindOptimalPath(nextCandis *common.CandidateSet, tracks map[*common.Candida
 			}
 
 			score := t.Probability + (min(ddistance, ldistance)/max(ddistance, ldistance))*n.Ep
-			//common.DebugLog("ddistance", ddistance)
-			//common.DebugLog("ldistance", ldistance)
-			//common.DebugLog("probability", newT.Probability)
 			if score > maxScore {
 				maxScore = score
 				maxTrack = t

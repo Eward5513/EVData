@@ -25,7 +25,8 @@ message MatchingPoint{
   double matched_lon=3;
   double matched_lat=4;
   int64 road_id=5;
-  int32 isBad=6;
+  int64 node_id=6;
+  int32 isBad=7;
 }
 
 // 完整轨迹信息
@@ -53,5 +54,6 @@ message TrackPoint {
   double matched_lon=12;
   double matched_lat=13;
   int64 road_id=14;
-  int32 isBad=15;
+  int64 node_id=15;
+  int32 isBad=16;
 }
