@@ -23,5 +23,7 @@ func main() {
 
 	traffic_flow.StartWriter(writerCh)
 
+	traffic_flow.GenerateNetwork()
+
 	common.InfoLog("Total Execution time: ", time.Now().Sub(begin))
 }

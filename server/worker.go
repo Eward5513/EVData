@@ -242,9 +242,8 @@ func (sw *ServerWorker) GenerateTrackHandler(w http.ResponseWriter, r *http.Requ
 }
 
 type TrackRequest struct {
-	Vin         int    `json:"vin"`
-	Tid         int    `json:"tid"`
-	CurrentTime string `json:"currentTime"`
+	Vin int `json:"vin"`
+	Tid int `json:"tid"`
 }
 
 // 轨迹查询响应结构

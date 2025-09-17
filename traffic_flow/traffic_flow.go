@@ -5,6 +5,7 @@ import (
 	"EVdata/common"
 	"EVdata/mapmatching"
 	"EVdata/proto_struct"
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -64,6 +65,8 @@ func StartWriter(wch chan []*common.TrafficFlow) {
 			// 将 Unix 毫秒时间戳转换为时间字符串（UTC时区，与生成时保持一致）
 			timeStr := time.UnixMilli(tf.Time[0]).UTC().Format("15:04:05")
 			_, err := fmt.Fprintf(queryFile, "%d %d %d %d %s\n", tf.Vin, tf.Node[0], tf.Node[len(tf.Node)-1], tf.Time[0], timeStr)
+			//_, err := fmt.Fprintf(queryFile, "%d %d %d\n", tf.Node[0], tf.Node[len(tf.Node)-1], tf.Time[0])
+
 			if err != nil {
 				common.ErrorLog("Failed to write to query.txt: " + err.Error())
 				continue
@@ -71,6 +74,7 @@ func StartWriter(wch chan []*common.TrafficFlow) {
 
 			// 写入 route.txt: vin 节点数量 node1 bool1 bool2 bool3 bool4 node2 bool1 bool2 bool3 bool4 ...
 			fmt.Fprintf(routeFile, "%d %d", tf.Vin, len(tf.Node))
+			//fmt.Fprintf(routeFile, "%d", len(tf.Node))
 			for _, nodeId := range tf.Node {
 				// 每个node后跟四个bool变量，这里先设为默认值false false false false
 				fmt.Fprintf(routeFile, " %d 0 0 0 0", nodeId)
@@ -79,6 +83,7 @@ func StartWriter(wch chan []*common.TrafficFlow) {
 
 			// 写入 time.txt: vin 节点数量-1 time[1] time[2] ...
 			fmt.Fprintf(timeFile, "%d %d", tf.Vin, len(tf.Node)-1)
+			//fmt.Fprintf(timeFile, "%d", len(tf.Node)-1)
 			for i := 1; i < len(tf.Time); i++ {
 				fmt.Fprintf(timeFile, " %d", tf.Time[i])
 			}
@@ -89,9 +94,6 @@ func StartWriter(wch chan []*common.TrafficFlow) {
 
 func StartWorker(rch chan []*proto_struct.TrackPoint, wch chan []*common.TrafficFlow) {
 	wg := &sync.WaitGroup{}
-
-	graph := mapmatching.BuildGraph("shanghai_new.json")
-	mapmatching.PreComputing(graph)
 
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
@@ -169,4 +171,38 @@ func SplitTrackPoint(data []*proto_struct.TrackPoint) [][]*proto_struct.TrackPoi
 		res = append(res, temp)
 	}
 	return res
+}
+
+func GenerateNetwork() {
+	// 构建道路图
+	graph := mapmatching.BuildGraph("shanghai_new.json")
+
+	// 统计节点数与边数（按方向统计）
+	nodeCount := len(graph)
+	edgeCount := 0
+	for _, gn := range graph {
+		edgeCount += len(gn.Next)
+	}
+
+	// 输出到 TRACK_DATA_DIR_PATH/network.txt
+	outPath := filepath.Join(common.TRACK_DATA_DIR_PATH, "network.txt")
+	f, err := os.Create(outPath)
+	if err != nil {
+		common.ErrorLog("Failed to create network.txt: " + err.Error())
+		return
+	}
+	defer f.Close()
+
+	w := bufio.NewWriter(f)
+	// 第一行：node数量 edge数量
+	fmt.Fprintf(w, "%d %d\n", nodeCount, edgeCount)
+
+	// 后续每行：nodeID1 nodeID2 roadID roadLength
+	for _, gn := range graph {
+		for _, road := range gn.Next {
+			length := common.Distance(gn.Lat, gn.Lon, road.Node.Lat, road.Node.Lon)
+			fmt.Fprintf(w, "%d %d %d %.6f\n", gn.Id, road.Node.Id, road.ID, length)
+		}
+	}
+	_ = w.Flush()
 }
