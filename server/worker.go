@@ -62,7 +62,8 @@ func (sw *ServerWorker) Init() {
 	//sw.data = pgpg.ReadPointFromParquet(common.RAW_POINT_PARQUET_PATH)
 
 	// 建图操作
-	sw.graph = mapmatching.BuildGraph("shanghai_new.json")
+	mapmatching.BuildGraph("shanghai_new.json")
+	sw.graph = mapmatching.Graph
 
 	for i := 0; i < common.SERVER_WORKER_COUNT; i++ {
 		go sw.work(sw.OrderCh[i], i)
@@ -320,12 +321,12 @@ func (sw *ServerWorker) TrackHandler(w http.ResponseWriter, r *http.Request) {
 	var points []TrackPointData
 
 	if len(targetRoute) >= 2 && len(targetTime) >= 2 {
-		// 解析route数据: vin 节点数量 node1 bool1 bool2 bool3 bool4 node2 ...
-		nodeCount, _ := strconv.Atoi(targetRoute[1])
+		// 解析route数据: 节点数量 node1 bool1 bool2 bool3 bool4 node2 ...
+		nodeCount, _ := strconv.Atoi(targetRoute[0])
 
 		// 提取节点ID和时间戳
-		nodeIndex := 2
-		timeIndex := 2
+		nodeIndex := 1
+		timeIndex := 1
 
 		for i := 0; i < nodeCount && nodeIndex < len(targetRoute); i++ {
 			nodeId, err := strconv.ParseInt(targetRoute[nodeIndex], 10, 64)
@@ -340,7 +341,7 @@ func (sw *ServerWorker) TrackHandler(w http.ResponseWriter, r *http.Request) {
 				if i == 0 {
 					// 第一个点使用query中的开始时间
 					if len(targetQuery) >= 4 {
-						timestampMillis, _ = strconv.ParseInt(targetQuery[3], 10, 64)
+						timestampMillis, _ = strconv.ParseInt(targetQuery[2], 10, 64)
 					}
 				} else if timeIndex < len(targetTime) {
 					// 其他点使用time文件中的时间

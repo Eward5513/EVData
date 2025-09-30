@@ -40,7 +40,7 @@ var (
 )
 
 var (
-	graph     map[int64]*common.GraphNode
+	Graph     map[int64]*common.GraphNode
 	indexRoot *IndexNode
 )
 
@@ -56,6 +56,7 @@ func ProcessDataLoop() {
 }
 
 func BuildGraph(jsonFile string) {
+	Graph = make(map[int64]*common.GraphNode)
 	f, err := os.Open(jsonFile)
 	defer f.Close()
 	if err != nil {
@@ -83,7 +84,7 @@ func BuildGraph(jsonFile string) {
 			common.MAX_LATITUDE = max(common.MAX_LATITUDE, element.Lat)
 			common.MAX_LONGITUDE = max(common.MAX_LONGITUDE, element.Lon)
 
-			graph[element.ID] = &common.GraphNode{
+			Graph[element.ID] = &common.GraphNode{
 				Lat:          element.Lat,
 				Lon:          element.Lon,
 				Next:         make([]*common.Road, 0),
@@ -96,10 +97,10 @@ func BuildGraph(jsonFile string) {
 	for _, road := range roads {
 		for i := 0; i < len(road.Nodes)-1; i++ {
 			if road.Tags.Oneway == "yes" {
-				graph[road.Nodes[i]].Next = append(graph[road.Nodes[i]].Next, &common.Road{ID: road.ID, Way: road, Node: graph[road.Nodes[i+1]]})
+				Graph[road.Nodes[i]].Next = append(Graph[road.Nodes[i]].Next, &common.Road{ID: road.ID, Way: road, Node: Graph[road.Nodes[i+1]]})
 			} else {
-				graph[road.Nodes[i]].Next = append(graph[road.Nodes[i]].Next, &common.Road{ID: road.ID, Way: road, Node: graph[road.Nodes[i+1]]})
-				graph[road.Nodes[i+1]].Next = append(graph[road.Nodes[i+1]].Next, &common.Road{ID: road.ID, Way: road, Node: graph[road.Nodes[i]]})
+				Graph[road.Nodes[i]].Next = append(Graph[road.Nodes[i]].Next, &common.Road{ID: road.ID, Way: road, Node: Graph[road.Nodes[i+1]]})
+				Graph[road.Nodes[i+1]].Next = append(Graph[road.Nodes[i+1]].Next, &common.Road{ID: road.ID, Way: road, Node: Graph[road.Nodes[i]]})
 			}
 		}
 	}
@@ -108,8 +109,8 @@ func BuildGraph(jsonFile string) {
 	log.Printf("元素数量: %d\n", len(roadNetwork.Elements))
 }
 
-func BuildIndex() *IndexNode {
-	root := &IndexNode{}
+func BuildIndex() {
+	indexRoot = &IndexNode{}
 	var buildIndex func(ro *IndexNode, minLat, maxLat, minLon, maxLon, base int64)
 	buildIndex = func(ro *IndexNode, minLat, maxLat, minLon, maxLon, base int64) {
 		//小数点后两位
@@ -126,10 +127,10 @@ func BuildIndex() *IndexNode {
 			}
 		}
 	}
-	buildIndex(root, int64(common.MIN_LATITUDE), int64(common.MAX_LATITUDE), int64(common.MIN_LONGITUDE), int64(common.MAX_LONGITUDE), 1000)
+	buildIndex(indexRoot, int64(common.MIN_LATITUDE), int64(common.MAX_LATITUDE), int64(common.MIN_LONGITUDE), int64(common.MAX_LONGITUDE), 1000)
 
-	for _, n := range graph {
-		indexNode := SearchIndex(n.Lat, n.Lon, root)
+	for _, n := range Graph {
+		indexNode := SearchIndex(n.Lat, n.Lon, indexRoot)
 		indexNode.graphNodes = append(indexNode.graphNodes, n)
 	}
 
@@ -142,7 +143,7 @@ func BuildIndex() *IndexNode {
 			indexNodesCnt += len(n.graphNodes)
 		}
 	}
-	countIndexNodes(root)
+	countIndexNodes(indexRoot)
 	common.DebugLog(indexNodesCnt, GraphNodesCnt)
 
 	var trimIndex func(*IndexNode)
@@ -154,14 +155,12 @@ func BuildIndex() *IndexNode {
 			}
 		}
 	}
-	trimIndex(root)
+	trimIndex(indexRoot)
 
 	indexNodesCnt = 0
 	GraphNodesCnt = 0
-	countIndexNodes(root)
+	countIndexNodes(indexRoot)
 	common.DebugLog(indexNodesCnt, GraphNodesCnt)
-
-	return root
 }
 
 func SearchIndex(lat float64, lon float64, ro *IndexNode) *IndexNode {
@@ -179,7 +178,7 @@ func SearchIndex(lat float64, lon float64, ro *IndexNode) *IndexNode {
 func PreComputing() {
 	var count, neighborCount int
 
-	for _, startNode := range graph {
+	for _, startNode := range Graph {
 		//common.InfoLog("precomputing ", count, len(graphNodes))
 		count++
 		neighborCount = 0
@@ -248,7 +247,7 @@ func StartReader(rch chan []*proto_struct.RawPoint) {
 		}
 		rch <- vps[i]
 	}
-	//rch <- vps[1]
+	//rch <- vps[50]
 	close(rch)
 	common.InfoLog("Finish reading ", cnt)
 }
@@ -719,45 +718,51 @@ func FindOptimalPath(nextCandis *common.CandidateSet, tracks map[*common.Candida
 			if p.Ttype == common.DISCRETE || n.Ttype == common.DISCRETE {
 				ldistance = ddistance
 			} else if OnSameRoad(p, n) == true {
-				// 在同一条路上，检查行进方向是否符合单向路要求
-				// 获取两个候选点的顶点（应该是相同的两个顶点）
-				var pNodes []*common.GraphNode
-				for node := range p.Vertex {
-					pNodes = append(pNodes, node)
-				}
+				// 计算两个投影点之间的距离
+				projDistance := common.Distance(p.Lat, p.Lon, n.Lat, n.Lon)
 
-				// 通过距离判断行进方向
-				// 如果 p 到 pNodes[0] 的距离 < n 到 pNodes[0] 的距离，说明从 pNodes[0] 向 pNodes[1] 行进
-				distP0 := p.Vertex[pNodes[0]]
-				distN0 := n.Vertex[pNodes[0]]
+				// 如果两个投影点距离在3米之内，跳过方向判断（距离太近，方向判断可能不准确）
+				if projDistance >= 3.0 {
+					// 在同一条路上，检查行进方向是否符合单向路要求
+					// 获取两个候选点的顶点（应该是相同的两个顶点）
+					var pNodes []*common.GraphNode
+					for node := range p.Vertex {
+						pNodes = append(pNodes, node)
+					}
 
-				var fromNode, toNode *common.GraphNode
-				if distP0 < distN0 {
-					// 从 pNodes[0] 向 pNodes[1] 行进
-					fromNode = pNodes[0]
-					toNode = pNodes[1]
-				} else {
-					// 从 pNodes[1] 向 pNodes[0] 行进
-					fromNode = pNodes[1]
-					toNode = pNodes[0]
-				}
+					// 通过距离判断行进方向
+					// 如果 p 到 pNodes[0] 的距离 < n 到 pNodes[0] 的距离，说明从 pNodes[0] 向 pNodes[1] 行进
+					distP0 := p.Vertex[pNodes[0]]
+					distN0 := n.Vertex[pNodes[0]]
 
-				// 检查这个方向是否在路网中存在（即检查是否符合单向路要求）
-				validDirection := false
-				for _, road := range fromNode.Next {
-					if road.Node == toNode && road.ID == p.RoadID {
-						validDirection = true
-						break
+					var fromNode, toNode *common.GraphNode
+					if distP0 < distN0 {
+						// 从 pNodes[0] 向 pNodes[1] 行进
+						fromNode = pNodes[0]
+						toNode = pNodes[1]
+					} else {
+						// 从 pNodes[1] 向 pNodes[0] 行进
+						fromNode = pNodes[1]
+						toNode = pNodes[0]
+					}
+
+					// 检查这个方向是否在路网中存在（即检查是否符合单向路要求）
+					validDirection := false
+					for _, road := range fromNode.Next {
+						if road.Node == toNode && road.ID == p.RoadID {
+							validDirection = true
+							break
+						}
+					}
+
+					if !validDirection {
+						// 方向不符合路网要求（可能是单向路反向），跳过此候选
+						common.DebugLog("Direction mismatch for one-way road")
+						continue
 					}
 				}
 
-				if !validDirection {
-					// 方向不符合路网要求（可能是单向路反向），跳过此候选
-					common.DebugLog("Direction mismatch for one-way road")
-					continue
-				}
-
-				ldistance = common.Distance(p.Lat, p.Lon, n.Lat, n.Lon)
+				ldistance = projDistance
 			} else {
 				var startNode, endNode *common.GraphNode
 

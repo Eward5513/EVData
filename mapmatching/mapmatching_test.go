@@ -15,15 +15,15 @@ import (
 var _ = Describe("mapmatching test", func() {
 	mapmatching.DistanceOffset = 40
 
-	graph := mapmatching.BuildGraph("shanghai_new.json")
+	mapmatching.BuildGraph("shanghai_new.json")
 
 	log.Println("MIN_LONGITUDE", common.MIN_LONGITUDE)
 	log.Println("MIN_LATITUDE", common.MIN_LATITUDE)
 	log.Println("MAX_LATITUDE", common.MAX_LATITUDE)
 	log.Println("MAX_LONGITUDE", common.MAX_LONGITUDE)
 
-	indexRoot := mapmatching.BuildIndex(graph)
-	mapmatching.PreComputing(graph)
+	mapmatching.BuildIndex()
+	mapmatching.PreComputing()
 	mmp := common.NewMemoryMap()
 
 	log.Println("Finish building index")
@@ -34,7 +34,7 @@ var _ = Describe("mapmatching test", func() {
 				Longitude: 121.129475,
 				Latitude:  31.317084,
 			}
-			cps := mapmatching.CandidateSearch(p, indexRoot, mmp, 0)
+			cps := mapmatching.CandidateSearch(p, mmp, 0)
 
 			printCandidatePoint(cps[0])
 			printCandidatePoint(cps[1])
@@ -77,7 +77,7 @@ var _ = Describe("mapmatching test", func() {
 				Longitude: 121.129804,
 				Latitude:  31.317035,
 			}
-			cps := mapmatching.CandidateSearch(p, indexRoot, mmp, 0)
+			cps := mapmatching.CandidateSearch(p, mmp, 0)
 
 			Expect(len(cps)).Should(Equal(1))
 
@@ -90,7 +90,7 @@ var _ = Describe("mapmatching test", func() {
 				Latitude:  31.31704,
 			}
 
-			cps := mapmatching.CandidateSearch(p, indexRoot, mmp, 0)
+			cps := mapmatching.CandidateSearch(p, mmp, 0)
 
 			//printCandidatePoint(cps[0])
 
@@ -113,13 +113,13 @@ var _ = Describe("mapmatching test", func() {
 				})),
 			))
 		})
-		XIt("should get right result #3", MustPassRepeatedly(200), func() {
+		It("should get right result #3", MustPassRepeatedly(200), func() {
 			p := &proto_struct.RawPoint{
 				Longitude: 121.272364,
 				Latitude:  31.293460,
 			}
 
-			cps := mapmatching.CandidateSearch(p, indexRoot, mmp, 0)
+			cps := mapmatching.CandidateSearch(p, mmp, 0)
 
 			printCandidatePoint(cps[0])
 			printCandidatePoint(cps[1])
@@ -337,7 +337,7 @@ var _ = Describe("mapmatching test", func() {
 			wch := make(chan *proto_struct.Track, 1)
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
-			go mapmatching.Worker(rch, wch, indexRoot, wg)
+			go mapmatching.Worker(rch, wch, wg)
 
 			rch <- msg
 			close(rch)
@@ -392,7 +392,7 @@ var _ = Describe("mapmatching test", func() {
 			wch := make(chan *proto_struct.Track, 1)
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
-			go mapmatching.Worker(rch, wch, indexRoot, wg)
+			go mapmatching.Worker(rch, wch, wg)
 
 			rch <- msg
 			close(rch)
@@ -531,7 +531,7 @@ var _ = Describe("mapmatching test", func() {
 			wch := make(chan *proto_struct.Track, 1)
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
-			go mapmatching.Worker(rch, wch, indexRoot, wg)
+			go mapmatching.Worker(rch, wch, wg)
 
 			rch <- msg
 			close(rch)

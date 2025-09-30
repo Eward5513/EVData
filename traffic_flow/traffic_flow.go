@@ -3,9 +3,7 @@ package traffic_flow
 import (
 	"EVdata/CSV"
 	"EVdata/common"
-	"EVdata/mapmatching"
 	"EVdata/proto_struct"
-	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -173,36 +171,36 @@ func SplitTrackPoint(data []*proto_struct.TrackPoint) [][]*proto_struct.TrackPoi
 	return res
 }
 
-func GenerateNetwork() {
-	// 构建道路图
-	graph := mapmatching.BuildGraph("shanghai_new.json")
-
-	// 统计节点数与边数（按方向统计）
-	nodeCount := len(graph)
-	edgeCount := 0
-	for _, gn := range graph {
-		edgeCount += len(gn.Next)
-	}
-
-	// 输出到 TRACK_DATA_DIR_PATH/network.txt
-	outPath := filepath.Join(common.TRACK_DATA_DIR_PATH, "network.txt")
-	f, err := os.Create(outPath)
-	if err != nil {
-		common.ErrorLog("Failed to create network.txt: " + err.Error())
-		return
-	}
-	defer f.Close()
-
-	w := bufio.NewWriter(f)
-	// 第一行：node数量 edge数量
-	fmt.Fprintf(w, "%d %d\n", nodeCount, edgeCount)
-
-	// 后续每行：nodeID1 nodeID2 roadID roadLength
-	for _, gn := range graph {
-		for _, road := range gn.Next {
-			length := common.Distance(gn.Lat, gn.Lon, road.Node.Lat, road.Node.Lon)
-			fmt.Fprintf(w, "%d %d %d %.6f\n", gn.Id, road.Node.Id, road.ID, length)
-		}
-	}
-	_ = w.Flush()
-}
+//func GenerateNetwork() {
+//	// 构建道路图
+//	graph := mapmatching.BuildGraph("shanghai_new.json")
+//
+//	// 统计节点数与边数（按方向统计）
+//	nodeCount := len(graph)
+//	edgeCount := 0
+//	for _, gn := range graph {
+//		edgeCount += len(gn.Next)
+//	}
+//
+//	// 输出到 TRACK_DATA_DIR_PATH/network.txt
+//	outPath := filepath.Join(common.TRACK_DATA_DIR_PATH, "network.txt")
+//	f, err := os.Create(outPath)
+//	if err != nil {
+//		common.ErrorLog("Failed to create network.txt: " + err.Error())
+//		return
+//	}
+//	defer f.Close()
+//
+//	w := bufio.NewWriter(f)
+//	// 第一行：node数量 edge数量
+//	fmt.Fprintf(w, "%d %d\n", nodeCount, edgeCount)
+//
+//	// 后续每行：nodeID1 nodeID2 roadID roadLength
+//	for _, gn := range graph {
+//		for _, road := range gn.Next {
+//			length := common.Distance(gn.Lat, gn.Lon, road.Node.Lat, road.Node.Lon)
+//			fmt.Fprintf(w, "%d %d %d %.6f\n", gn.Id, road.Node.Id, road.ID, length)
+//		}
+//	}
+//	_ = w.Flush()
+//}
