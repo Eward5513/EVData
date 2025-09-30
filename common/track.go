@@ -7,7 +7,7 @@ import (
 
 const (
 	MAGIC_NUM = 111320
-	SIGMA     = 40
+	SIGMA     = 10
 )
 
 type CandidateType = int
@@ -18,7 +18,7 @@ const (
 )
 
 type CandidatePoint struct {
-	Vertex        []*GraphNode
+	Vertex        map[*GraphNode]float64 // GraphNode -> 投影点到该节点的距离
 	TT            float64
 	Ttype         CandidateType
 	Distance      float64

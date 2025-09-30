@@ -34,18 +34,18 @@ func main() {
 	common.SetLogLevel(common.INFO)
 
 	t := time.Now()
-	graph := mapmatching.BuildGraph("shanghai_new.json")
+	mapmatching.BuildGraph("shanghai_new.json")
 	common.InfoLog("time for building graph: ", time.Since(t))
 	t = time.Now()
 
-	indexRoot := mapmatching.BuildIndex(graph)
+	mapmatching.BuildIndex()
 	common.InfoLog("time for building index: ", time.Since(t))
 	t = time.Now()
 
-	mapmatching.PreComputing(graph)
+	mapmatching.PreComputing()
 	common.InfoLog("time for precomputing: ", time.Since(t))
 
-	mapmatching.ProcessDataLoop(indexRoot)
+	mapmatching.ProcessDataLoop()
 
 	log.Println("Total Execution time: ", time.Now().Sub(begin))
 }

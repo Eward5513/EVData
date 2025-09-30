@@ -39,18 +39,23 @@ var (
 	DistanceOffset float64
 )
 
-func ProcessDataLoop(indexRoot *IndexNode) {
+var (
+	graph     map[int64]*common.GraphNode
+	indexRoot *IndexNode
+)
+
+func ProcessDataLoop() {
 	readerChan := make(chan []*proto_struct.RawPoint, 1000)
 	writerChan := make(chan *proto_struct.Track, 1000)
 
 	go StartReader(readerChan)
 
-	go ProcessData(readerChan, writerChan, indexRoot)
+	go ProcessData(readerChan, writerChan)
 
 	StartWriterWorker(writerChan)
 }
 
-func BuildGraph(jsonFile string) map[int64]*common.GraphNode {
+func BuildGraph(jsonFile string) {
 	f, err := os.Open(jsonFile)
 	defer f.Close()
 	if err != nil {
@@ -67,7 +72,6 @@ func BuildGraph(jsonFile string) map[int64]*common.GraphNode {
 	}
 
 	roads := make(map[int64]*common.Element)
-	graphNodes := make(map[int64]*common.GraphNode)
 
 	for _, element := range roadNetwork.Elements {
 		if element.Type == "way" {
@@ -79,7 +83,7 @@ func BuildGraph(jsonFile string) map[int64]*common.GraphNode {
 			common.MAX_LATITUDE = max(common.MAX_LATITUDE, element.Lat)
 			common.MAX_LONGITUDE = max(common.MAX_LONGITUDE, element.Lon)
 
-			graphNodes[element.ID] = &common.GraphNode{
+			graph[element.ID] = &common.GraphNode{
 				Lat:          element.Lat,
 				Lon:          element.Lon,
 				Next:         make([]*common.Road, 0),
@@ -92,20 +96,19 @@ func BuildGraph(jsonFile string) map[int64]*common.GraphNode {
 	for _, road := range roads {
 		for i := 0; i < len(road.Nodes)-1; i++ {
 			if road.Tags.Oneway == "yes" {
-				graphNodes[road.Nodes[i]].Next = append(graphNodes[road.Nodes[i]].Next, &common.Road{ID: road.ID, Way: road, Node: graphNodes[road.Nodes[i+1]]})
+				graph[road.Nodes[i]].Next = append(graph[road.Nodes[i]].Next, &common.Road{ID: road.ID, Way: road, Node: graph[road.Nodes[i+1]]})
 			} else {
-				graphNodes[road.Nodes[i]].Next = append(graphNodes[road.Nodes[i]].Next, &common.Road{ID: road.ID, Way: road, Node: graphNodes[road.Nodes[i+1]]})
-				graphNodes[road.Nodes[i+1]].Next = append(graphNodes[road.Nodes[i+1]].Next, &common.Road{ID: road.ID, Way: road, Node: graphNodes[road.Nodes[i]]})
+				graph[road.Nodes[i]].Next = append(graph[road.Nodes[i]].Next, &common.Road{ID: road.ID, Way: road, Node: graph[road.Nodes[i+1]]})
+				graph[road.Nodes[i+1]].Next = append(graph[road.Nodes[i+1]].Next, &common.Road{ID: road.ID, Way: road, Node: graph[road.Nodes[i]]})
 			}
 		}
 	}
 	log.Printf("版本: %v\n", roadNetwork.Version)
 	log.Printf("生成器: %s\n", roadNetwork.Generator)
 	log.Printf("元素数量: %d\n", len(roadNetwork.Elements))
-	return graphNodes
 }
 
-func BuildIndex(graph map[int64]*common.GraphNode) *IndexNode {
+func BuildIndex() *IndexNode {
 	root := &IndexNode{}
 	var buildIndex func(ro *IndexNode, minLat, maxLat, minLon, maxLon, base int64)
 	buildIndex = func(ro *IndexNode, minLat, maxLat, minLon, maxLon, base int64) {
@@ -173,10 +176,10 @@ func SearchIndex(lat float64, lon float64, ro *IndexNode) *IndexNode {
 	return searchIndex(&common.GraphNode{Lat: lat, Lon: lon}, ro, 1)
 }
 
-func PreComputing(graphNodes map[int64]*common.GraphNode) {
+func PreComputing() {
 	var count, neighborCount int
 
-	for _, startNode := range graphNodes {
+	for _, startNode := range graph {
 		//common.InfoLog("precomputing ", count, len(graphNodes))
 		count++
 		neighborCount = 0
@@ -308,20 +311,20 @@ func MergePoints(mps []*proto_struct.MatchingPoint, rps []*proto_struct.RawPoint
 	return res
 }
 
-func ProcessData(readerChan chan []*proto_struct.RawPoint, writerChan chan *proto_struct.Track, indexRoot *IndexNode) {
+func ProcessData(readerChan chan []*proto_struct.RawPoint, writerChan chan *proto_struct.Track) {
 
 	wg := &sync.WaitGroup{}
 
 	for i := 0; i < WorkerCount; i++ {
 		wg.Add(1)
-		go Worker(readerChan, writerChan, indexRoot, wg)
+		go Worker(readerChan, writerChan, wg)
 	}
 
 	wg.Wait()
 	close(writerChan)
 }
 
-func Worker(readerChan chan []*proto_struct.RawPoint, writerChan chan *proto_struct.Track, indexRoot *IndexNode, wg *sync.WaitGroup) {
+func Worker(readerChan chan []*proto_struct.RawPoint, writerChan chan *proto_struct.Track, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	mmap := common.NewMemoryMap()
@@ -357,7 +360,7 @@ func Worker(readerChan chan []*proto_struct.RawPoint, writerChan chan *proto_str
 
 			var firstCandi, curCandi *common.CandidateSet
 			for _, p := range ps {
-				cs := CandidateSearch(p, indexRoot, mmap, 0)
+				cs := CandidateSearch(p, mmap, 0)
 
 				if curCandi == nil {
 					curCandi = &common.CandidateSet{Cp: cs}
@@ -388,7 +391,7 @@ func Worker(readerChan chan []*proto_struct.RawPoint, writerChan chan *proto_str
 					//第一次尝试扩大搜索范围
 					if retry == 0 {
 						retry++
-						cps := CandidateSearch(c.Cp[0].OriginalPoint, indexRoot, mmap, float64(retry))
+						cps := CandidateSearch(c.Cp[0].OriginalPoint, mmap, float64(retry))
 						c.Next = &common.CandidateSet{Cp: cps, Next: c.Next}
 						candidateTracks = bak
 					} else if retry == 1 {
@@ -444,7 +447,7 @@ func PreProcess(rps []*proto_struct.RawPoint) []*proto_struct.RawPoint {
 	return res
 }
 
-func CandidateSearch(p *proto_struct.RawPoint, indexRoot *IndexNode, mmp *common.MemoryMap, tt float64) []*common.CandidatePoint {
+func CandidateSearch(p *proto_struct.RawPoint, mmp *common.MemoryMap, tt float64) []*common.CandidatePoint {
 
 	targetMap := make(map[int64]int64)
 	candidates := make([]*common.CandidatePoint, 0)
@@ -506,7 +509,13 @@ func CandidateSearch(p *proto_struct.RawPoint, indexRoot *IndexNode, mmp *common
 				}
 
 				cand := mmp.GetCandidatePoint()
-				cand.Vertex = []*common.GraphNode{gn, way.Node}
+				// 计算投影点到两个端点的距离
+				distToStart := common.Distance(footLat, footLon, gn.Lat, gn.Lon)
+				distToEnd := common.Distance(footLat, footLon, way.Node.Lat, way.Node.Lon)
+				cand.Vertex = map[*common.GraphNode]float64{
+					gn:       distToStart,
+					way.Node: distToEnd,
+				}
 				cand.Ttype = common.NORMAL
 				cand.TT = t
 				cand.Distance = distMeters
@@ -548,7 +557,12 @@ func CandidateSearch(p *proto_struct.RawPoint, indexRoot *IndexNode, mmp *common
 				}
 
 				cand := mmp.GetCandidatePoint()
-				cand.Vertex = []*common.GraphNode{gn, way.Node}
+				// 端点候选，投影点就在gn上，到gn距离为0，到way.Node距离为路段长度
+				distToEnd := common.Distance(gn.Lat, gn.Lon, way.Node.Lat, way.Node.Lon)
+				cand.Vertex = map[*common.GraphNode]float64{
+					gn:       0,
+					way.Node: distToEnd,
+				}
 				cand.Ttype = common.NORMAL
 				cand.TT = 0
 				cand.Distance = dis
@@ -564,7 +578,13 @@ func CandidateSearch(p *proto_struct.RawPoint, indexRoot *IndexNode, mmp *common
 	}
 	if len(candidates) == 0 {
 		cp := mmp.GetCandidatePoint()
-		cp.Vertex = []*common.GraphNode{minNode1, minNode2}
+		// 离散点：计算投影点到两个端点的距离
+		distToStart := common.Distance(minLat, minLon, minNode1.Lat, minNode1.Lon)
+		distToEnd := common.Distance(minLat, minLon, minNode2.Lat, minNode2.Lon)
+		cp.Vertex = map[*common.GraphNode]float64{
+			minNode1: distToStart,
+			minNode2: distToEnd,
+		}
 		cp.Ttype = common.DISCRETE
 		cp.TT = mint
 		cp.Distance = minDis
@@ -665,10 +685,22 @@ func OnSameRoad(p1, p2 *common.CandidatePoint) bool {
 	if p1 == nil || p2 == nil {
 		return false
 	}
-	if p1.Vertex == nil || p2.Vertex == nil || len(p1.Vertex) != len(p2.Vertex) || len(p1.Vertex) != 2 {
+	if p1.Vertex == nil || p2.Vertex == nil || len(p1.Vertex) != 2 || len(p2.Vertex) != 2 {
 		return false
 	}
-	return (p1.Vertex[0] == p2.Vertex[0] && p1.Vertex[1] == p2.Vertex[1]) || (p1.Vertex[0] == p2.Vertex[1] && p1.Vertex[1] == p2.Vertex[0])
+
+	// 获取两个候选点的顶点
+	var p1Nodes, p2Nodes []*common.GraphNode
+	for node := range p1.Vertex {
+		p1Nodes = append(p1Nodes, node)
+	}
+	for node := range p2.Vertex {
+		p2Nodes = append(p2Nodes, node)
+	}
+
+	// 检查是否在同一条路上（顶点相同或顺序相反）
+	return (p1Nodes[0] == p2Nodes[0] && p1Nodes[1] == p2Nodes[1]) ||
+		(p1Nodes[0] == p2Nodes[1] && p1Nodes[1] == p2Nodes[0])
 }
 
 func FindOptimalPath(nextCandis *common.CandidateSet, tracks map[*common.CandidatePoint]*proto_struct.Track, mmap *common.MemoryMap) map[*common.CandidatePoint]*proto_struct.Track {
@@ -687,19 +719,104 @@ func FindOptimalPath(nextCandis *common.CandidateSet, tracks map[*common.Candida
 			if p.Ttype == common.DISCRETE || n.Ttype == common.DISCRETE {
 				ldistance = ddistance
 			} else if OnSameRoad(p, n) == true {
+				// 在同一条路上，检查行进方向是否符合单向路要求
+				// 获取两个候选点的顶点（应该是相同的两个顶点）
+				var pNodes []*common.GraphNode
+				for node := range p.Vertex {
+					pNodes = append(pNodes, node)
+				}
+
+				// 通过距离判断行进方向
+				// 如果 p 到 pNodes[0] 的距离 < n 到 pNodes[0] 的距离，说明从 pNodes[0] 向 pNodes[1] 行进
+				distP0 := p.Vertex[pNodes[0]]
+				distN0 := n.Vertex[pNodes[0]]
+
+				var fromNode, toNode *common.GraphNode
+				if distP0 < distN0 {
+					// 从 pNodes[0] 向 pNodes[1] 行进
+					fromNode = pNodes[0]
+					toNode = pNodes[1]
+				} else {
+					// 从 pNodes[1] 向 pNodes[0] 行进
+					fromNode = pNodes[1]
+					toNode = pNodes[0]
+				}
+
+				// 检查这个方向是否在路网中存在（即检查是否符合单向路要求）
+				validDirection := false
+				for _, road := range fromNode.Next {
+					if road.Node == toNode && road.ID == p.RoadID {
+						validDirection = true
+						break
+					}
+				}
+
+				if !validDirection {
+					// 方向不符合路网要求（可能是单向路反向），跳过此候选
+					common.DebugLog("Direction mismatch for one-way road")
+					continue
+				}
+
 				ldistance = common.Distance(p.Lat, p.Lon, n.Lat, n.Lon)
 			} else {
 				var startNode, endNode *common.GraphNode
 
-				for i := 0; i < len(p.Vertex); i++ {
-					for j := 0; j < len(n.Vertex); j++ {
-						ld := common.Distance(p.Lat, p.Lon, p.Vertex[i].Lat, p.Vertex[i].Lon) + common.Distance(n.Lat, n.Lon, n.Vertex[j].Lat, n.Vertex[j].Lon)
-						if pa, exist := p.Vertex[i].ShortestPath[n.Vertex[j]]; exist {
+				// 提前筛选有效的端点
+				// 对于p点：找出可以作为"离开端点"的节点（从路段起点到该端点是顺方向）
+				var pNodes []*common.GraphNode
+				for node := range p.Vertex {
+					pNodes = append(pNodes, node)
+				}
+
+				pValidEndpoints := make(map[*common.GraphNode]float64)
+				// 检查 pNodes[0] → pNodes[1]
+				for _, road := range pNodes[0].Next {
+					if road.Node == pNodes[1] && road.ID == p.RoadID {
+						pValidEndpoints[pNodes[1]] = p.Vertex[pNodes[1]]
+						break
+					}
+				}
+				// 检查 pNodes[1] → pNodes[0]
+				for _, road := range pNodes[1].Next {
+					if road.Node == pNodes[0] && road.ID == p.RoadID {
+						pValidEndpoints[pNodes[0]] = p.Vertex[pNodes[0]]
+						break
+					}
+				}
+
+				// 对于n点：找出可以作为"进入端点"的节点（从该端点到路段终点是顺方向）
+				var nNodes []*common.GraphNode
+				for node := range n.Vertex {
+					nNodes = append(nNodes, node)
+				}
+
+				nValidEndpoints := make(map[*common.GraphNode]float64)
+				// 检查 nNodes[0] → nNodes[1]
+				for _, road := range nNodes[0].Next {
+					if road.Node == nNodes[1] && road.ID == n.RoadID {
+						nValidEndpoints[nNodes[0]] = n.Vertex[nNodes[0]]
+						break
+					}
+				}
+				// 检查 nNodes[1] → nNodes[0]
+				for _, road := range nNodes[1].Next {
+					if road.Node == nNodes[0] && road.ID == n.RoadID {
+						nValidEndpoints[nNodes[1]] = n.Vertex[nNodes[1]]
+						break
+					}
+				}
+
+				// 只在有效端点对之间搜索路径
+				for pNode, distP := range pValidEndpoints {
+					for nNode, distN := range nValidEndpoints {
+						ld := distP + distN
+
+						if pa, exist := pNode.ShortestPath[nNode]; exist {
 							ld += pa.Distance
 							if ldistance > ld {
 								ldistance = ld
-								startNode = p.Vertex[i]
-								endNode = n.Vertex[j]
+								startNode = pNode
+								endNode = nNode
 								sp = pa
 							}
 						} else {

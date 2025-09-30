@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 )
 
 var (
@@ -54,6 +53,13 @@ func StartWriter(wch chan []*common.TrafficFlow) {
 	}
 	defer timeFile.Close()
 
+	vinFile, err := os.Create(filepath.Join(baseDir, "vin.txt"))
+	if err != nil {
+		common.ErrorLog("Failed to create vin.txt: " + err.Error())
+		return
+	}
+	defer vinFile.Close()
+
 	// 处理传入的 TrafficFlow 数据
 	for trafficFlows := range wch {
 		for _, tf := range trafficFlows {
@@ -63,9 +69,9 @@ func StartWriter(wch chan []*common.TrafficFlow) {
 
 			// 写入 query.txt: vin 起点id 终点id 开始时间 时间戳字符串
 			// 将 Unix 毫秒时间戳转换为时间字符串（UTC时区，与生成时保持一致）
-			timeStr := time.UnixMilli(tf.Time[0]).UTC().Format("15:04:05")
-			_, err := fmt.Fprintf(queryFile, "%d %d %d %d %s\n", tf.Vin, tf.Node[0], tf.Node[len(tf.Node)-1], tf.Time[0], timeStr)
-			//_, err := fmt.Fprintf(queryFile, "%d %d %d\n", tf.Node[0], tf.Node[len(tf.Node)-1], tf.Time[0])
+			//timeStr := time.UnixMilli(tf.Time[0]).UTC().Format("15:04:05")
+			//_, err := fmt.Fprintf(queryFile, "%d %d %d %d %s\n", tf.Vin, tf.Node[0], tf.Node[len(tf.Node)-1], tf.Time[0], timeStr)
+			_, err := fmt.Fprintf(queryFile, "%d %d %d\n", tf.Node[0], tf.Node[len(tf.Node)-1], tf.Time[0])
 
 			if err != nil {
 				common.ErrorLog("Failed to write to query.txt: " + err.Error())
@@ -73,8 +79,8 @@ func StartWriter(wch chan []*common.TrafficFlow) {
 			}
 
 			// 写入 route.txt: vin 节点数量 node1 bool1 bool2 bool3 bool4 node2 bool1 bool2 bool3 bool4 ...
-			fmt.Fprintf(routeFile, "%d %d", tf.Vin, len(tf.Node))
-			//fmt.Fprintf(routeFile, "%d", len(tf.Node))
+			//fmt.Fprintf(routeFile, "%d %d", tf.Vin, len(tf.Node))
+			fmt.Fprintf(routeFile, "%d", len(tf.Node))
 			for _, nodeId := range tf.Node {
 				// 每个node后跟四个bool变量，这里先设为默认值false false false false
 				fmt.Fprintf(routeFile, " %d 0 0 0 0", nodeId)
@@ -82,12 +88,14 @@ func StartWriter(wch chan []*common.TrafficFlow) {
 			fmt.Fprintf(routeFile, "\n")
 
 			// 写入 time.txt: vin 节点数量-1 time[1] time[2] ...
-			fmt.Fprintf(timeFile, "%d %d", tf.Vin, len(tf.Node)-1)
-			//fmt.Fprintf(timeFile, "%d", len(tf.Node)-1)
+			//fmt.Fprintf(timeFile, "%d %d", tf.Vin, len(tf.Node)-1)
+			fmt.Fprintf(timeFile, "%d", len(tf.Node)-1)
 			for i := 1; i < len(tf.Time); i++ {
 				fmt.Fprintf(timeFile, " %d", tf.Time[i])
 			}
 			fmt.Fprintf(timeFile, "\n")
+
+			fmt.Fprintln(vinFile, tf.Vin)
 		}
 	}
 }
@@ -147,20 +155,12 @@ func SplitTrackPoint(data []*proto_struct.TrackPoint) [][]*proto_struct.TrackPoi
 				startIndex = j
 				preTime = data[j].TimeInt
 			}
-		} else if data[j].IsBad == 1 {
+		} else if data[j].IsBad == 1 || data[j].TimeInt-preTime > 600 {
 			temp := make([]*proto_struct.TrackPoint, 0, j-startIndex)
 			temp = append(temp, data[startIndex:j]...)
 			res = append(res, temp)
 			startIndex = -1
 			preTime = -1
-		} else if data[j].VehicleStatus == 2 {
-			if data[j].TimeInt-preTime > 600 {
-				temp := make([]*proto_struct.TrackPoint, 0, j-startIndex)
-				temp = append(temp, data[startIndex:j]...)
-				res = append(res, temp)
-				startIndex = -1
-				preTime = -1
-			}
 		} else {
 			preTime = data[j].TimeInt
 		}
