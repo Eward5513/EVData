@@ -7,5 +7,5 @@
 *.profile
 *.ipynb
 *.exe
-*.geojson
 .idea
+Cesium-1.127/
