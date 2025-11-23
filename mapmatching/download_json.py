@@ -2,7 +2,7 @@ import requests
 import json
 import time
 
-def download_overpass_data( output_file="shanghai_new.json"):
+def download_overpass_data( output_file="/home/tzhang174/EVData/traffic_light/backend/shanghai_new.json"):
     # Overpass API 端点
     overpass_url = "https://overpass-api.de/api/interpreter"
     
