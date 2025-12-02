@@ -12,9 +12,13 @@ OUTPUT_PATH = Path("/home/tzhang174/EVData/traffic_light/backend/intersections.j
 OUTPUT_GEOJSON_PATH = Path("/home/tzhang174/EVData/traffic_light/frontend/intersections.geojson")
 
 # Epsilon (cluster radius) in meters for DBSCAN-like grouping
-CLUSTER_EPS_METERS = 30.0
+CLUSTER_EPS_METERS = 50.0
 # Search radius in meters to associate nearby OSM nodes/ways to a group
 WAY_NODE_RADIUS_METERS = 25.0
+# Degree threshold for intersection-like nodes
+DEGREE_THRESHOLD = 3
+# Radius for including arbitrary OSM nodes near a signal (non-transitive)
+NEAR_NODE_RADIUS_METERS = 30.0
 # -----------------------------------------------------------
 
 # Grid cell sizes in degrees (approx near lat ~31°)
@@ -168,12 +172,13 @@ def build_intersections() -> None:
     signal_nodes = extract_signal_nodes(signals_json)
     signal_points = [(n["lat"], n["lon"]) for n in signal_nodes]
 
+    print("Building OSM indexes for ways & nodes ...")
+    node_id_to_coord, ways_by_id, node_id_to_way_ids, node_points, node_ids_in_order, node_grid = build_osm_indexes(roads_json)
+
+    # Cluster only signals by 30/50m connectivity (transitive across signals only)
     print(f"Clustering {len(signal_nodes)} signal nodes with eps={CLUSTER_EPS_METERS}m ...")
     clusters = cluster_dbscan_connectivity(signal_points, CLUSTER_EPS_METERS)
     print(f"Formed {len(clusters)} groups")
-
-    print("Building OSM indexes for ways & nodes ...")
-    node_id_to_coord, ways_by_id, node_id_to_way_ids, node_points, node_ids_in_order, node_grid = build_osm_indexes(roads_json)
 
     groups_output: List[Dict[str, Any]] = []
     for gid, comp in enumerate(clusters, start=1):
@@ -183,14 +188,25 @@ def build_intersections() -> None:
         sum_lon = sum(signal_nodes[i]["lon"] for i in comp)
         centroid = [sum_lon / len(comp), sum_lat / len(comp)]
 
-        nearby_node_ids: Set[int] = set()
+        # Collect ways that are directly connected to any signal node in this group
+        # (i.e., the OSM way includes the traffic_signal node id in its nodes list)
+        signal_node_ids: Set[int] = {signal_nodes[i]["id"] for i in comp if signal_nodes[i].get("id") is not None}
+        way_ids: Set[int] = set()
+        for nid in signal_node_ids:
+            way_ids |= node_id_to_way_ids.get(nid, set())
+
+        # Also include arbitrary OSM nodes within 30m of ANY signal in this group (non-transitive),
+        # ignoring degree; and include all ways connected to these nearby nodes
+        near_node_ids: Set[int] = set()
         for i in comp:
             lat = signal_nodes[i]["lat"]
             lon = signal_nodes[i]["lon"]
-            nearby_node_ids |= find_osm_nodes_near(lat, lon, node_points, node_ids_in_order, node_grid, WAY_NODE_RADIUS_METERS)
-
-        way_ids: Set[int] = set()
-        for nid in nearby_node_ids:
+            nearby = find_osm_nodes_near(lat, lon, node_points, node_ids_in_order, node_grid, NEAR_NODE_RADIUS_METERS)
+            near_node_ids |= nearby
+        # Exclude the signal nodes themselves if they exist in roads data
+        near_node_ids -= signal_node_ids
+        # Expand ways by near nodes as well
+        for nid in near_node_ids:
             way_ids |= node_id_to_way_ids.get(nid, set())
 
         ways_payload: List[Dict[str, Any]] = []
@@ -209,6 +225,20 @@ def build_intersections() -> None:
                 }
             )
 
+        near_nodes_payload = []
+        for nid in sorted(near_node_ids):
+            coord = node_id_to_coord.get(nid)
+            if not coord:
+                continue
+            lat, lon = coord
+            near_nodes_payload.append(
+                {
+                    "id": nid,
+                    "lat": lat,
+                    "lon": lon,
+                }
+            )
+
         signals_payload = [
             {
                 "id": signal_nodes[i]["id"],
@@ -224,6 +254,7 @@ def build_intersections() -> None:
                 "id": gid,
                 "centroid": centroid,
                 "signal_nodes": signals_payload,
+                "near_nodes": near_nodes_payload,
                 "ways": ways_payload,
             }
         )
@@ -251,6 +282,22 @@ def build_intersections() -> None:
                         "group_id": gid,
                         "signal_id": sn["id"],
                         "tags": sn.get("tags", {}),
+                    },
+                }
+            )
+        # Near OSM nodes (within 30m of signals, non-transitive) as Point features
+        for nn in group.get("near_nodes", []):
+            feature_collection["features"].append(
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [nn["lon"], nn["lat"]],
+                    },
+                    "properties": {
+                        "type": "near_node",
+                        "group_id": gid,
+                        "node_id": nn["id"],
                     },
                 }
             )
